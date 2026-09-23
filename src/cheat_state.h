@@ -4,7 +4,7 @@
 #include <chrono>
 
 struct CheatConfig {
-    // Tab Navigation: 0 = Terminal, 1 = Visuals / ESP, 2 = Aimbot, 3 = Misc, 4 = Settings
+    // Tab Navigation: 0 = Visuals / ESP, 1 = Combat / Aim, 2 = Misc, 3 = Settings
     int active_tab = 0;
 
     // Overlay State

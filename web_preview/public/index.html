@@ -929,18 +929,15 @@
         <!-- Tabs -->
         <div class="tabs-bar">
           <div class="tab-item active" onclick="selectTab(0, this)">
-            <span>&gt;_</span> pwsh
-          </div>
-          <div class="tab-item" onclick="selectTab(1, this)">
             <span>[#]</span> Visuals
           </div>
-          <div class="tab-item" onclick="selectTab(2, this)">
+          <div class="tab-item" onclick="selectTab(1, this)">
             <span>[*]</span> Combat
           </div>
-          <div class="tab-item" onclick="selectTab(3, this)">
+          <div class="tab-item" onclick="selectTab(2, this)">
             <span>[+]</span> Misc
           </div>
-          <div class="tab-item" onclick="selectTab(4, this)">
+          <div class="tab-item" onclick="selectTab(3, this)">
             <span>[~]</span> Settings
           </div>
         </div>
@@ -956,157 +953,8 @@
       <!-- Window Body -->
       <div class="win-body" id="winBody">
 
-        <!-- TAB 0: pwsh Terminal View (1:1 with Terminal.jpeg) -->
+        <!-- TAB 0: Visuals / ESP Mockup -->
         <div class="tab-page active" id="tab0">
-          <div class="view-terminal">
-            <div class="terminal-subhead">PowerShell 7.6.3</div>
-
-            <div class="terminal-columns">
-              <!-- Left Column: Pink ASCII Art -->
-              <div class="ascii-col">
-              .
-            -+-               :-
-    -      +###-             -===-
-  .###   +#####*.          +#####*:
- *###- +####- -####*     -###*-=*#:
- *******#--#-*.::**- ==- -=*#:
- =###*: ... **.:*#**+ -..-*- +###*:
-:      -###+::: *+.:-..+###=.     :
-**:     **#+  =+         *#::.    =##*
-.###*+==: +#=.+.    -     =- =#+ .-+#####*
- ####***+*+ ..=##+  ####=  : -**-***####*
- =####+=- .. -####  ####*: *** -***###*
-  =########*.:###+ =######-:-***###*
-    =#######:.*** +########=.:=*****=
-      .+***=..:. +*********+:.
-        -**#::+#*: :+=+- .#+. =########-
-        =***###***- :  -***-  +*********=
-         *#########+ ***###* -***#####-
-          *###*#***  -*****-.##:
-           *#*******-   -*- +***=
-            *#########* - -#####+
-                        .+#*+
-                          :
-              </div>
-
-              <!-- Right Column: System info matching reference -->
-              <div class="info-col">
-                <div class="greeting-line">Hey, Vanil</div>
-
-                <!-- Hardware Box -->
-                <div class="cyber-box">
-                  <div class="cyber-box-title">Hardware</div>
-                  <div class="info-row">
-                    <span class="info-label">CPU</span>
-                    <span class="info-val">AMD Ryzen 5 5600X (6C / 12T) @ 4.65 GHz</span>
-                  </div>
-                  <div class="info-row">
-                    <span class="info-label">GPU</span>
-                    <span class="info-val">NVIDIA GeForce RTX 3060 [Discrete] // 11.83 GiB</span>
-                  </div>
-                  <div class="info-row">
-                    <span class="info-label">RAM</span>
-                    <span class="info-val">12.61 GiB / 15.89 GiB</span>
-                    <div class="meter-wrap">
-                      <div class="meter-bar"><div class="meter-fill" style="width: 79%;"></div></div>
-                      <span class="meter-txt">79%</span>
-                    </div>
-                  </div>
-                  <div class="info-row">
-                    <span class="info-label">SWAP</span>
-                    <span class="info-val">338.86 MiB / 12.50 GiB</span>
-                    <div class="meter-wrap">
-                      <div class="meter-bar"><div class="meter-fill" style="width: 3%;"></div></div>
-                      <span class="meter-txt">3%</span>
-                    </div>
-                  </div>
-                  <div class="info-row">
-                    <span class="info-label">DRIVE</span>
-                    <span class="info-val">C:\ 313.56 GiB / 464.79 GiB</span>
-                    <div class="meter-wrap">
-                      <div class="meter-bar"><div class="meter-fill" style="width: 67%;"></div></div>
-                      <span class="meter-txt">67%</span>
-                    </div>
-                  </div>
-                  <div class="info-row">
-                    <span class="info-label">DRIVE</span>
-                    <span class="info-val">D:\ 541.77 GiB / 931.51 GiB</span>
-                    <div class="meter-wrap">
-                      <div class="meter-bar"><div class="meter-fill" style="width: 58%;"></div></div>
-                      <span class="meter-txt">58%</span>
-                    </div>
-                  </div>
-                  <div class="info-row">
-                    <span class="info-label">DRIVE</span>
-                    <span class="info-val">E:\ 267.97 GiB / 443.23 GiB</span>
-                    <div class="meter-wrap">
-                      <div class="meter-bar"><div class="meter-fill" style="width: 60%;"></div></div>
-                      <span class="meter-txt">60%</span>
-                    </div>
-                  </div>
-                  <div class="info-row">
-                    <span class="info-label">DRIVE</span>
-                    <span class="info-val">F:\ 148.94 GiB / 488.28 GiB</span>
-                    <div class="meter-wrap">
-                      <div class="meter-bar"><div class="meter-fill" style="width: 31%;"></div></div>
-                      <span class="meter-txt">31%</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Session Box -->
-                <div class="cyber-box">
-                  <div class="cyber-box-title">Session</div>
-                  <div class="info-row">
-                    <span class="info-label">LOGIN</span>
-                    <span class="info-val">Vanil // 2026-07-16 14:11:16</span>
-                  </div>
-                </div>
-
-                <!-- Uptime / Date Box -->
-                <div class="cyber-box">
-                  <div class="cyber-box-title">Uptime / Date</div>
-                  <div class="info-row">
-                    <span class="info-label yellow">UPTIME</span>
-                    <span class="info-val">6 hours, 36 mins</span>
-                  </div>
-                  <div class="info-row">
-                    <span class="info-label yellow">DATE</span>
-                    <span class="info-val" id="currentDateVal">2026-07-16 20:42:32</span>
-                  </div>
-                </div>
-
-                <!-- Quote & Dots -->
-                <div class="quote-line">Bonsoir! Elliot.</div>
-                <div class="dots-palette">
-                  <div class="palette-dot" style="background: var(--color-white);"></div>
-                  <div class="palette-dot" style="background: var(--color-cyan);"></div>
-                  <div class="palette-dot" style="background: var(--color-purple);"></div>
-                  <div class="palette-dot" style="background: var(--color-blue);"></div>
-                  <div class="palette-dot" style="background: var(--color-yellow);"></div>
-                  <div class="palette-dot" style="background: var(--color-lime);"></div>
-                  <div class="palette-dot" style="background: var(--color-red);"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Terminal Prompt Row -->
-            <div class="prompt-row">
-              <span class="prompt-label">PS C:\Users\Vanil&gt;</span>
-              <input type="text" class="prompt-input" id="cmdInput" placeholder="Type command: help, status, esp on, aim on, clear..." onkeydown="handleCmd(event)" />
-            </div>
-            <div class="command-chips">
-              <button class="chip-btn" onclick="execQuickCmd('help')">help</button>
-              <button class="chip-btn" onclick="execQuickCmd('status')">status</button>
-              <button class="chip-btn" onclick="execQuickCmd('esp on')">esp on</button>
-              <button class="chip-btn" onclick="execQuickCmd('aim on')">aim on</button>
-              <button class="chip-btn" onclick="execQuickCmd('clear')">clear</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB 1: Visuals / ESP Mockup -->
-        <div class="tab-page" id="tab1">
           <div class="grid-two-col">
             <!-- Left Card: Controls -->
             <div class="card-pane">
@@ -1165,8 +1013,8 @@
           </div>
         </div>
 
-        <!-- TAB 2: Combat / Aim Assist Mockup -->
-        <div class="tab-page" id="tab2">
+        <!-- TAB 1: Combat / Aim Assist Mockup -->
+        <div class="tab-page" id="tab1">
           <div class="grid-two-col">
             <div class="card-pane">
               <div class="card-title"><span>[*]</span> Aimbot / Combat (Mockup)</div>
@@ -1227,8 +1075,8 @@
           </div>
         </div>
 
-        <!-- TAB 3: Misc / Game Mods Mockup -->
-        <div class="tab-page" id="tab3">
+        <!-- TAB 2: Misc / Game Mods Mockup -->
+        <div class="tab-page" id="tab2">
           <div class="grid-two-col">
             <div class="card-pane">
               <div class="card-title"><span>[+]</span> Game Tweaks (Mockup)</div>
@@ -1275,8 +1123,8 @@
           </div>
         </div>
 
-        <!-- TAB 4: Overlay Preferences -->
-        <div class="tab-page" id="tab4">
+        <!-- TAB 3: Overlay Preferences -->
+        <div class="tab-page" id="tab3">
           <div class="grid-two-col">
             <div class="card-pane">
               <div class="card-title"><span>[~]</span> Window & Display Preferences</div>

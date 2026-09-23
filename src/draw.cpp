@@ -146,156 +146,6 @@ void drawBegin() {
 // Sub-views rendering
 // -------------------------------------------------------------
 
-static void RenderTerminalView() {
-    ImDrawList *dl = ImGui::GetWindowDrawList();
-    ImVec2 content_start = ImGui::GetCursorScreenPos();
-    float total_w = kBaseWidth - 48.0f;
-
-    // Subtitle top-left
-    dl->AddText(content_start, CyberTheme::ColLime, "PowerShell 7.6.3");
-
-    float col1_w = 400.0f;
-    float col2_x = content_start.x + col1_w + 24.0f;
-    float col2_w = total_w - col1_w - 24.0f;
-
-    // LEFT COLUMN: ASCII Art in Pink
-    float art_start_y = content_start.y + 36.0f;
-    for (int i = 0; i < CyberTheme::ASCII_ART_LINE_COUNT; ++i) {
-        dl->AddText(ImVec2(content_start.x + 8.0f, art_start_y + i * 20.0f),
-                    CyberTheme::ColPink, CyberTheme::ASCII_ART_LINES[i]);
-    }
-
-    // RIGHT COLUMN: Hey, Vanil and Info Boxes
-    float cur_y = content_start.y + 12.0f;
-    
-    // Greeting
-    std::string greeting = "Hey, " + g_config.user_name;
-    dl->AddText(ImVec2(col2_x, cur_y), CyberTheme::ColLime, greeting.c_str());
-    cur_y += 34.0f;
-
-    // BOX 1: Hardware
-    float box1_h = 192.0f;
-    CyberTheme::BeginCyberBox(dl, ImVec2(col2_x, cur_y), ImVec2(col2_x + col2_w, cur_y + box1_h), "Hardware");
-    
-    float item_y = cur_y + 18.0f;
-    float label_x = col2_x + 16.0f;
-    float val_x = col2_x + 96.0f;
-    float bar_x = col2_x + 280.0f;
-    float bar_w = 110.0f;
-
-    // CPU
-    dl->AddText(ImVec2(label_x, item_y), CyberTheme::ColLime, "CPU");
-    dl->AddText(ImVec2(val_x, item_y), CyberTheme::ColWhite, g_config.cpu_model.c_str());
-    item_y += 24.0f;
-
-    // GPU
-    dl->AddText(ImVec2(label_x, item_y), CyberTheme::ColLime, "GPU");
-    dl->AddText(ImVec2(val_x, item_y), CyberTheme::ColWhite, g_config.gpu_model.c_str());
-    item_y += 24.0f;
-
-    // RAM
-    char ram_txt[64];
-    std::snprintf(ram_txt, sizeof(ram_txt), "%.2f GiB / %.2f GiB", g_config.ram_used_gb, g_config.ram_total_gb);
-    dl->AddText(ImVec2(label_x, item_y), CyberTheme::ColLime, "RAM");
-    dl->AddText(ImVec2(val_x, item_y), CyberTheme::ColWhite, ram_txt);
-    CyberTheme::RenderTerminalProgressBar(dl, ImVec2(bar_x, item_y + 2.0f), bar_w, 14.0f, g_config.ram_used_gb / g_config.ram_total_gb, "79%");
-    item_y += 24.0f;
-
-    // SWAP
-    char swap_txt[64];
-    std::snprintf(swap_txt, sizeof(swap_txt), "%.2f MiB / %.2f GiB", g_config.swap_used_mb, g_config.swap_total_mb / 1024.0f);
-    dl->AddText(ImVec2(label_x, item_y), CyberTheme::ColLime, "SWAP");
-    dl->AddText(ImVec2(val_x, item_y), CyberTheme::ColWhite, swap_txt);
-    CyberTheme::RenderTerminalProgressBar(dl, ImVec2(bar_x, item_y + 2.0f), bar_w, 14.0f, 0.03f, "3%");
-    item_y += 24.0f;
-
-    // DRIVE C:\ and D:\
-    dl->AddText(ImVec2(label_x, item_y), CyberTheme::ColLime, "DRIVE");
-    dl->AddText(ImVec2(val_x, item_y), CyberTheme::ColWhite, "C:\\ 313.56 GiB / 464.79 GiB");
-    CyberTheme::RenderTerminalProgressBar(dl, ImVec2(bar_x, item_y + 2.0f), bar_w, 14.0f, 0.67f, "67%");
-    item_y += 24.0f;
-
-    dl->AddText(ImVec2(label_x, item_y), CyberTheme::ColLime, "DRIVE");
-    dl->AddText(ImVec2(val_x, item_y), CyberTheme::ColWhite, "D:\\ 541.77 GiB / 931.51 GiB");
-    CyberTheme::RenderTerminalProgressBar(dl, ImVec2(bar_x, item_y + 2.0f), bar_w, 14.0f, 0.58f, "58%");
-    item_y += 24.0f;
-
-    dl->AddText(ImVec2(label_x, item_y), CyberTheme::ColLime, "DRIVE");
-    dl->AddText(ImVec2(val_x, item_y), CyberTheme::ColWhite, "E:\\ 267.97 GiB / 443.23 GiB");
-    CyberTheme::RenderTerminalProgressBar(dl, ImVec2(bar_x, item_y + 2.0f), bar_w, 14.0f, 0.60f, "60%");
-    
-    cur_y += box1_h + 14.0f;
-
-    // BOX 2: Session
-    float box2_h = 52.0f;
-    CyberTheme::BeginCyberBox(dl, ImVec2(col2_x, cur_y), ImVec2(col2_x + col2_w, cur_y + box2_h), "Session");
-    dl->AddText(ImVec2(label_x, cur_y + 16.0f), CyberTheme::ColLime, "LOGIN");
-    std::string sess_str = g_config.user_name + " // " + g_config.login_timestamp;
-    dl->AddText(ImVec2(val_x, cur_y + 16.0f), CyberTheme::ColWhite, sess_str.c_str());
-    cur_y += box2_h + 14.0f;
-
-    // BOX 3: Uptime / Date
-    float box3_h = 74.0f;
-    CyberTheme::BeginCyberBox(dl, ImVec2(col2_x, cur_y), ImVec2(col2_x + col2_w, cur_y + box3_h), "Uptime / Date");
-    dl->AddText(ImVec2(label_x, cur_y + 16.0f), CyberTheme::ColYellow, "UPTIME");
-    char up_str[64];
-    std::snprintf(up_str, sizeof(up_str), "%d hours, %d mins", g_config.uptime_hours, g_config.uptime_mins);
-    dl->AddText(ImVec2(val_x, cur_y + 16.0f), CyberTheme::ColWhite, up_str);
-
-    dl->AddText(ImVec2(label_x, cur_y + 42.0f), CyberTheme::ColYellow, "DATE");
-    dl->AddText(ImVec2(val_x, cur_y + 42.0f), CyberTheme::ColWhite, "2026-07-16 20:42:32");
-    cur_y += box3_h + 14.0f;
-
-    // Quote: Bonsoir! Elliot.
-    dl->AddText(ImVec2(col2_x, cur_y), CyberTheme::ColOrange, g_config.quote_text.c_str());
-    cur_y += 28.0f;
-
-    // Color dots palette (7 dots)
-    const ImU32 dot_cols[7] = {
-        CyberTheme::ColWhite,
-        CyberTheme::ColCyan,
-        CyberTheme::ColMagenta,
-        CyberTheme::ColBlue,
-        CyberTheme::ColYellow,
-        CyberTheme::ColLime,
-        CyberTheme::ColRed
-    };
-    for (int d = 0; d < 7; ++d) {
-        dl->AddCircleFilled(ImVec2(col2_x + 8.0f + d * 18.0f, cur_y + 4.0f), 5.0f, dot_cols[d]);
-    }
-
-    // Bottom prompt line
-    float prompt_y = content_start.y + kBaseHeight - 146.0f;
-    std::string prompt_str = "PS C:\\Users\\" + g_config.user_name + "> ";
-    dl->AddText(ImVec2(content_start.x + 8.0f, prompt_y), CyberTheme::ColLime, prompt_str.c_str());
-    
-    // Interactive prompt input
-    ImGui::SetCursorScreenPos(ImVec2(content_start.x + 190.0f, prompt_y - 4.0f));
-    ImGui::PushItemWidth(380.0f);
-    if (ImGui::InputText("##console_in", g_config.console_input_buf, sizeof(g_config.console_input_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
-        if (g_config.console_input_buf[0] != '\0') {
-            g_config.console_log.push_back(std::string("> ") + g_config.console_input_buf);
-            if (strcmp(g_config.console_input_buf, "help") == 0) {
-                g_config.console_log.push_back("Commands: help, status, esp [on|off], aim [on|off], clear, exit");
-            } else if (strcmp(g_config.console_input_buf, "status") == 0) {
-                g_config.console_log.push_back("[✓] MLBB Memory: Hooked | Overlay: Active | Root: UID 0");
-            } else if (strcmp(g_config.console_input_buf, "esp on") == 0) {
-                g_config.esp_enabled = true;
-                g_config.console_log.push_back("[+] ESP Visuals enabled.");
-            } else if (strcmp(g_config.console_input_buf, "esp off") == 0) {
-                g_config.esp_enabled = false;
-                g_config.console_log.push_back("[-] ESP Visuals disabled.");
-            } else if (strcmp(g_config.console_input_buf, "clear") == 0) {
-                g_config.console_log.clear();
-            } else {
-                g_config.console_log.push_back(std::string("[*] Command executed: ") + g_config.console_input_buf);
-            }
-            g_config.console_input_buf[0] = '\0';
-        }
-    }
-    ImGui::PopItemWidth();
-}
-
 static void RenderVisualsTab() {
     ImDrawList *dl = ImGui::GetWindowDrawList();
     ImVec2 start = ImGui::GetCursorScreenPos();
@@ -625,11 +475,10 @@ void Layout_tick_UI(bool *running) {
     dl->AddLine(ImVec2(win_min.x, win_min.y + kTitleHeight), ImVec2(win_max.x, win_min.y + kTitleHeight), CyberTheme::ColBorder);
 
     // -------------------------------------------------------------
-    // Titlebar Navigation: Tabs (pwsh reference, ESP, Aim, Misc, Settings)
+    // Titlebar Navigation: Tabs (Visuals, Combat, Misc, Settings)
     // -------------------------------------------------------------
     struct TabItem { const char* label; const char* title; };
     const TabItem tabs[] = {
-        { "pwsh", "PowerShell 7.6.3" },
         { "Visuals", "ESP / Radar" },
         { "Combat", "Aim Assist" },
         { "Misc", "Game Mods" },
@@ -637,9 +486,9 @@ void Layout_tick_UI(bool *running) {
     };
 
     float tab_x = win_min.x + 16.0f;
-    for (int t = 0; t < 5; ++t) {
+    for (int t = 0; t < 4; ++t) {
         bool active = (g_config.active_tab == t);
-        float tab_w = (t == 0) ? 96.0f : 100.0f;
+        float tab_w = 110.0f;
         float tab_h = 36.0f;
         ImVec2 tmin(tab_x, win_min.y + 8.0f);
         ImVec2 tmax(tab_x + tab_w, win_min.y + 8.0f + tab_h);
@@ -745,11 +594,10 @@ void Layout_tick_UI(bool *running) {
                           false, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);
 
         switch (g_config.active_tab) {
-            case 0: RenderTerminalView(); break;
-            case 1: RenderVisualsTab(); break;
-            case 2: RenderAimbotTab(); break;
-            case 3: RenderMiscTab(); break;
-            case 4: RenderSettingsTab(running); break;
+            case 0: RenderVisualsTab(); break;
+            case 1: RenderAimbotTab(); break;
+            case 2: RenderMiscTab(); break;
+            case 3: RenderSettingsTab(running); break;
         }
 
         ImGui::EndChild();
