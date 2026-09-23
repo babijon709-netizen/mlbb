@@ -11,16 +11,16 @@ IMGUI_DIR ?= ../../external/imgui
 CXX       ?= g++
 BUILD     ?= build
 
-CXXFLAGS  ?= -std=c++17 -O2 -I../../include -I$(IMGUI_DIR) -I. -Wall
+CXXFLAGS  ?= -std=c++17 -O2 -I../../include -I../../src -I$(IMGUI_DIR) -I. -Wall
 
 # imgui_demo.cpp нужен не для демо-окна: в v1.83 именно в нём лежит
 # ShowFontAtlas(), без которого imgui.cpp не линкуется.
 IMGUI_SRC := $(IMGUI_DIR)/imgui.cpp $(IMGUI_DIR)/imgui_draw.cpp \
              $(IMGUI_DIR)/imgui_widgets.cpp $(IMGUI_DIR)/imgui_tables.cpp \
              $(IMGUI_DIR)/imgui_demo.cpp
-SRC       := ../../src/Menu.cpp ../../src/Theme.cpp main.cpp SoftRenderer.cpp
+SRC       := ../../src/Menu.cpp ../../src/Theme.cpp ../../src/render/SoftRenderer.cpp main.cpp
 
-VPATH     := .:../../src:$(IMGUI_DIR)
+VPATH     := .:../../src:../../src/render:$(IMGUI_DIR)
 OBJ       := $(addprefix $(BUILD)/,$(notdir $(SRC:.cpp=.o))) \
              $(addprefix $(BUILD)/,$(notdir $(IMGUI_SRC:.cpp=.o)))
 BIN       := $(BUILD)/mlbb_preview

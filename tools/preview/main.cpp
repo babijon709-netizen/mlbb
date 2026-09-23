@@ -16,7 +16,7 @@
 #include "mlbb_gui/Menu.h"
 #include "mlbb_gui/Theme.h"
 
-#include "SoftRenderer.h"
+#include "render/SoftRenderer.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -110,13 +110,13 @@ int main(int argc, char** argv)
     io.Fonts->GetTexDataAsRGBA32(&texels, &texW, &texH);
     io.Fonts->SetTexID((ImTextureID)(intptr_t)1);
 
-    mlbb_preview::SoftRenderer renderer;
-    renderer.Init(dispW, dispH, scale);
+    mlbb::render::SoftRenderer renderer;
+    renderer.Init(dispW, dispH, (float)scale);
     if (bgPath) {
         if (!renderer.LoadBackgroundPPM(bgPath))
             std::fprintf(stderr, "warning: could not load background '%s'\n", bgPath);
     } else {
-        renderer.Clear(mlbb_preview::Color4{ 12, 22, 14, 255 });
+        renderer.Clear(mlbb::render::Color4{ 12, 22, 14, 255 });
     }
 
     float mx = -1.0f, my = -1.0f;
@@ -141,7 +141,7 @@ int main(int argc, char** argv)
 
     renderer.Render(ImGui::GetDrawData(), texels, texW, texH);
 
-    if (!renderer.SavePPM(outPath)) {
+    if (!renderer.SavePPM(outPath, scale)) {
         std::fprintf(stderr, "error: cannot write '%s'\n", outPath);
         return 1;
     }

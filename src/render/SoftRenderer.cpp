@@ -1,10 +1,11 @@
-#include "SoftRenderer.h"
+#include "render/SoftRenderer.h"
 
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 
-namespace mlbb_preview {
+namespace mlbb {
+namespace render {
 
 namespace {
 
@@ -12,20 +13,29 @@ inline int ClampI(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v
 inline float ClampF(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 inline int MinI(int a, int b) { return a < b ? a : b; }
 inline int MaxI(int a, int b) { return a > b ? a : b; }
+// x / 255 without an integer division - this is the hottest line of the whole
+// renderer, and a divide costs an order of magnitude more than the shifts.
+inline int Div255(int x) { return (x * 257 + 257) >> 16; }
 
 }  // namespace
 
-void SoftRenderer::Init(int width, int height, int scale)
+void SoftRenderer::Init(int width, int height, float pixelScale)
 {
-    m_width = width;
-    m_height = height;
-    m_scale = scale < 1 ? 1 : scale;
-    m_pixels.assign((size_t)(m_width * m_scale) * (size_t)(m_height * m_scale), Color4());
+    m_width  = width  < 1 ? 1 : width;
+    m_height = height < 1 ? 1 : height;
+    m_scale  = pixelScale < 0.05f ? 0.05f : pixelScale;
+    m_fbWidth  = (int)std::lround((double)m_width  * (double)m_scale);
+    m_fbHeight = (int)std::lround((double)m_height * (double)m_scale);
+    if (m_fbWidth  < 1) m_fbWidth  = 1;
+    if (m_fbHeight < 1) m_fbHeight = 1;
+    m_pixels.assign((size_t)m_fbWidth * (size_t)m_fbHeight, Color4());
 }
 
 void SoftRenderer::Clear(const Color4& c)
 {
-    for (size_t i = 0; i < m_pixels.size(); ++i) m_pixels[i] = c;
+    Color4* p = m_pixels.data();
+    const size_t n = m_pixels.size();
+    for (size_t i = 0; i < n; ++i) p[i] = c;
 }
 
 bool SoftRenderer::LoadBackgroundPPM(const char* path)
@@ -55,7 +65,7 @@ bool SoftRenderer::LoadBackgroundPPM(const char* path)
     // ImageMagick happily writes Q16 PPMs (two bytes per sample, maxval 65535),
     // so the sample size has to follow the header, not be assumed to be 1.
     const int sampleBytes = (maxv > 255) ? 2 : 1;
-    std::vector<unsigned char> buf((size_t)iw * ih * 3 * (size_t)sampleBytes);
+    std::vector<unsigned char> buf((size_t)iw * (size_t)ih * 3u * (size_t)sampleBytes);
     const size_t got = std::fread(buf.data(), 1, buf.size(), f);
     std::fclose(f);
     if (got != buf.size()) return false;
@@ -66,13 +76,12 @@ bool SoftRenderer::LoadBackgroundPPM(const char* path)
         return (unsigned char)((((unsigned)p[0] << 8) | p[1]) * 255u / (unsigned)maxv);
     };
 
-    const int fbW = m_width * m_scale, fbH = m_height * m_scale;
-    for (int y = 0; y < fbH; ++y) {
-        const int sy = ClampI(y * ih / fbH, 0, ih - 1);
-        for (int x = 0; x < fbW; ++x) {
-            const int sx = ClampI(x * iw / fbW, 0, iw - 1);
-            const size_t si = ((size_t)sy * iw + sx) * 3;
-            Color4& d = m_pixels[(size_t)y * fbW + x];
+    for (int y = 0; y < m_fbHeight; ++y) {
+        const int sy = ClampI(y * ih / m_fbHeight, 0, ih - 1);
+        for (int x = 0; x < m_fbWidth; ++x) {
+            const int sx = ClampI(x * iw / m_fbWidth, 0, iw - 1);
+            const size_t si = ((size_t)sy * (size_t)iw + (size_t)sx) * 3u;
+            Color4& d = m_pixels[(size_t)y * (size_t)m_fbWidth + (size_t)x];
             d.r = sample(si + 0);
             d.g = sample(si + 1);
             d.b = sample(si + 2);
@@ -84,17 +93,16 @@ bool SoftRenderer::LoadBackgroundPPM(const char* path)
 
 void SoftRenderer::BlendPixel(int x, int y, const Color4& src)
 {
-    const int fbW = m_width * m_scale, fbH = m_height * m_scale;
-    if (x < 0 || y < 0 || x >= fbW || y >= fbH) return;
+    if (x < 0 || y < 0 || x >= m_fbWidth || y >= m_fbHeight) return;
     if (src.a == 0) return;
 
-    Color4& dst = m_pixels[(size_t)y * fbW + x];
+    Color4& dst = m_pixels[(size_t)y * (size_t)m_fbWidth + (size_t)x];
     if (src.a == 255) { dst.r = src.r; dst.g = src.g; dst.b = src.b; dst.a = 255; return; }
 
     const int a = src.a, ia = 255 - a;
-    dst.r = (unsigned char)((src.r * a + dst.r * ia) / 255);
-    dst.g = (unsigned char)((src.g * a + dst.g * ia) / 255);
-    dst.b = (unsigned char)((src.b * a + dst.b * ia) / 255);
+    dst.r = (unsigned char)Div255(src.r * a + dst.r * ia);
+    dst.g = (unsigned char)Div255(src.g * a + dst.g * ia);
+    dst.b = (unsigned char)Div255(src.b * a + dst.b * ia);
     dst.a = 255;
 }
 
@@ -110,7 +118,7 @@ Color4 SoftRenderer::SampleTexture(float u, float v, int texWidth, int texHeight
     auto fetch = [&](int ix, int iy) -> Color4 {
         ix = ClampI(ix, 0, texWidth - 1);
         iy = ClampI(iy, 0, texHeight - 1);
-        const unsigned char* p = m_texels + ((size_t)iy * (size_t)texWidth + (size_t)ix) * 4;
+        const unsigned char* p = m_texels + ((size_t)iy * (size_t)texWidth + (size_t)ix) * 4u;
         return Color4{ p[0], p[1], p[2], p[3] };
     };
 
@@ -127,9 +135,9 @@ Color4 SoftRenderer::SampleTexture(float u, float v, int texWidth, int texHeight
 }
 
 void SoftRenderer::RasterizeTriangle(const ImDrawVert& va, const ImDrawVert& vb, const ImDrawVert& vc,
-                                     const ImVec4& clip, int fbWidth, int fbHeight)
+                                     const ImVec4& clip)
 {
-    const float S = (float)m_scale;
+    const float S = m_scale;
     const float ax = va.pos.x * S, ay = va.pos.y * S;
     const float bx = vb.pos.x * S, by = vb.pos.y * S;
     const float cx = vc.pos.x * S, cy = vc.pos.y * S;
@@ -138,14 +146,51 @@ void SoftRenderer::RasterizeTriangle(const ImDrawVert& va, const ImDrawVert& vb,
     if (area > -0.0001f && area < 0.0001f) return;
 
     const int minX = MaxI((int)std::floor(std::fmin(ax, std::fmin(bx, cx))), (int)std::floor(clip.x * S));
-    const int maxX = MinI((int)std::ceil(std::fmax(ax, std::fmax(bx, cx))), (int)std::ceil(clip.z * S));
+    const int maxX = MinI((int)std::ceil (std::fmax(ax, std::fmax(bx, cx))), (int)std::ceil (clip.z * S));
     const int minY = MaxI((int)std::floor(std::fmin(ay, std::fmin(by, cy))), (int)std::floor(clip.y * S));
-    const int maxY = MinI((int)std::ceil(std::fmax(ay, std::fmax(by, cy))), (int)std::ceil(clip.w * S));
+    const int maxY = MinI((int)std::ceil (std::fmax(ay, std::fmax(by, cy))), (int)std::ceil (clip.w * S));
 
     const float invArea = 1.0f / area;
 
-    for (int y = MaxI(minY, 0); y <= MinI(maxY, fbHeight - 1); ++y) {
-        for (int x = MaxI(minX, 0); x <= MinI(maxX, fbWidth - 1); ++x) {
+    // ---- flat fill fast path -------------------------------------------------
+    // ImGui draws every filled rectangle/rounded rect as a solid colour pair of
+    // triangles using the atlas' white pixel, so this path covers most of the
+    // screen: no texture fetch, no per-pixel interpolation.
+    const bool solidUV  = (va.uv.x == vb.uv.x && va.uv.y == vb.uv.y && va.uv.x == vc.uv.x && va.uv.y == vc.uv.y);
+    const bool solidCol = (va.col == vb.col && vb.col == vc.col);
+    if (solidUV && solidCol) {
+        const ImU32 c = va.col;
+        const Color4 src{ (unsigned char)((c >> IM_COL32_R_SHIFT) & 0xFF),
+                          (unsigned char)((c >> IM_COL32_G_SHIFT) & 0xFF),
+                          (unsigned char)((c >> IM_COL32_B_SHIFT) & 0xFF),
+                          (unsigned char)((c >> IM_COL32_A_SHIFT) & 0xFF) };
+        const bool opaque = (src.a == 255);
+
+        for (int y = MaxI(minY, 0); y <= MinI(maxY, m_fbHeight - 1); ++y) {
+            const float py = (float)y + 0.5f;
+            Color4* row = &m_pixels[(size_t)y * (size_t)m_fbWidth];
+            for (int x = MaxI(minX, 0); x <= MinI(maxX, m_fbWidth - 1); ++x) {
+                const float px = (float)x + 0.5f;
+                const float l0 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) * invArea;
+                if (l0 < 0.0f) continue;
+                const float l1 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) * invArea;
+                if (l1 < 0.0f) continue;
+                if (l0 + l1 > 1.0f) continue;
+
+                if (opaque) { row[x] = src; continue; }
+                const int a = src.a, ia = 255 - a;
+                Color4& dst = row[x];
+                dst.r = (unsigned char)Div255(src.r * a + dst.r * ia);
+                dst.g = (unsigned char)Div255(src.g * a + dst.g * ia);
+                dst.b = (unsigned char)Div255(src.b * a + dst.b * ia);
+                dst.a = 255;
+            }
+        }
+        return;
+    }
+
+    for (int y = MaxI(minY, 0); y <= MinI(maxY, m_fbHeight - 1); ++y) {
+        for (int x = MaxI(minX, 0); x <= MinI(maxX, m_fbWidth - 1); ++x) {
             const float px = (float)x + 0.5f;
             const float py = (float)y + 0.5f;
 
@@ -156,19 +201,18 @@ void SoftRenderer::RasterizeTriangle(const ImDrawVert& va, const ImDrawVert& vb,
 
             const float u = l0 * va.uv.x + l1 * vb.uv.x + l2 * vc.uv.x;
             const float v = l0 * va.uv.y + l1 * vb.uv.y + l2 * vc.uv.y;
-
             const Color4 tex = SampleTexture(u, v, m_texWidth, m_texHeight);
 
             const ImU32 ca = va.col, cb = vb.col, cc = vc.col;
-            const float cr = ((ca >> IM_COL32_R_SHIFT) & 0xFF) * l0 + ((cb >> IM_COL32_R_SHIFT) & 0xFF) * l1 + ((cc >> IM_COL32_R_SHIFT) & 0xFF) * l2;
-            const float cg = ((ca >> IM_COL32_G_SHIFT) & 0xFF) * l0 + ((cb >> IM_COL32_G_SHIFT) & 0xFF) * l1 + ((cc >> IM_COL32_G_SHIFT) & 0xFF) * l2;
-            const float cb2 = ((ca >> IM_COL32_B_SHIFT) & 0xFF) * l0 + ((cb >> IM_COL32_B_SHIFT) & 0xFF) * l1 + ((cc >> IM_COL32_B_SHIFT) & 0xFF) * l2;
+            const float cr  = ((ca >> IM_COL32_R_SHIFT) & 0xFF) * l0 + ((cb >> IM_COL32_R_SHIFT) & 0xFF) * l1 + ((cc >> IM_COL32_R_SHIFT) & 0xFF) * l2;
+            const float cg  = ((ca >> IM_COL32_G_SHIFT) & 0xFF) * l0 + ((cb >> IM_COL32_G_SHIFT) & 0xFF) * l1 + ((cc >> IM_COL32_G_SHIFT) & 0xFF) * l2;
+            const float cbb = ((ca >> IM_COL32_B_SHIFT) & 0xFF) * l0 + ((cb >> IM_COL32_B_SHIFT) & 0xFF) * l1 + ((cc >> IM_COL32_B_SHIFT) & 0xFF) * l2;
             const float calpha = ((ca >> IM_COL32_A_SHIFT) & 0xFF) * l0 + ((cb >> IM_COL32_A_SHIFT) & 0xFF) * l1 + ((cc >> IM_COL32_A_SHIFT) & 0xFF) * l2;
 
             Color4 src;
-            src.r = (unsigned char)ClampF(cr * (float)tex.r / 255.0f, 0.0f, 255.0f);
-            src.g = (unsigned char)ClampF(cg * (float)tex.g / 255.0f, 0.0f, 255.0f);
-            src.b = (unsigned char)ClampF(cb2 * (float)tex.b / 255.0f, 0.0f, 255.0f);
+            src.r = (unsigned char)ClampF(cr  * (float)tex.r / 255.0f, 0.0f, 255.0f);
+            src.g = (unsigned char)ClampF(cg  * (float)tex.g / 255.0f, 0.0f, 255.0f);
+            src.b = (unsigned char)ClampF(cbb * (float)tex.b / 255.0f, 0.0f, 255.0f);
             src.a = (unsigned char)ClampF(calpha * (float)tex.a / 255.0f, 0.0f, 255.0f);
 
             BlendPixel(x, y, src);
@@ -183,14 +227,12 @@ void SoftRenderer::Render(const ImDrawData* drawData, const unsigned char* texel
     m_texWidth = texWidth;
     m_texHeight = texHeight;
 
-    const int fbW = m_width * m_scale;
-    const int fbH = m_height * m_scale;
     const ImVec2 disp = drawData->DisplayPos;
 
     for (int n = 0; n < drawData->CmdListsCount; ++n) {
         const ImDrawList* list = drawData->CmdLists[n];
         const ImDrawVert* vtxBuffer = list->VtxBuffer.Data;
-        const ImDrawIdx* idxBuffer = list->IdxBuffer.Data;
+        const ImDrawIdx*  idxBuffer = list->IdxBuffer.Data;
 
         for (int ci = 0; ci < list->CmdBuffer.Size; ++ci) {
             const ImDrawCmd* cmd = &list->CmdBuffer[ci];
@@ -207,34 +249,35 @@ void SoftRenderer::Render(const ImDrawData* drawData, const unsigned char* texel
                 RasterizeTriangle(vtxBuffer[vtxOff + idx[e + 0]],
                                   vtxBuffer[vtxOff + idx[e + 1]],
                                   vtxBuffer[vtxOff + idx[e + 2]],
-                                  clip, fbW, fbH);
+                                  clip);
             }
         }
     }
 }
 
-bool SoftRenderer::SavePPM(const char* path) const
+bool SoftRenderer::SavePPM(const char* path, int downsample) const
 {
     FILE* f = std::fopen(path, "wb");
     if (!f) return false;
 
-    std::fprintf(f, "P6\n%d %d\n255\n", m_width, m_height);
+    const int S = downsample < 1 ? 1 : downsample;
+    const int outW = m_fbWidth / S;
+    const int outH = m_fbHeight / S;
+    if (outW < 1 || outH < 1) { std::fclose(f); return false; }
 
-    const int S = m_scale;
-    const int fbW = m_width * m_scale;
+    std::fprintf(f, "P6\n%d %d\n255\n", outW, outH);
+
     const int samples = S * S;
-    std::vector<unsigned char> out((size_t)m_width * m_height * 3);
+    std::vector<unsigned char> out((size_t)outW * (size_t)outH * 3u);
 
-    for (int y = 0; y < m_height; ++y) {
-        for (int x = 0; x < m_width; ++x) {
+    for (int y = 0; y < outH; ++y) {
+        for (int x = 0; x < outW; ++x) {
             int r = 0, g = 0, b = 0;
             for (int sy = 0; sy < S; ++sy) {
-                const Color4* row = &m_pixels[(size_t)(y * S + sy) * fbW + x * S];
-                for (int sx = 0; sx < S; ++sx) {
-                    r += row[sx].r; g += row[sx].g; b += row[sx].b;
-                }
+                const Color4* row = &m_pixels[(size_t)(y * S + sy) * (size_t)m_fbWidth + (size_t)(x * S)];
+                for (int sx = 0; sx < S; ++sx) { r += row[sx].r; g += row[sx].g; b += row[sx].b; }
             }
-            const size_t o = ((size_t)y * m_width + x) * 3;
+            const size_t o = ((size_t)y * (size_t)outW + (size_t)x) * 3u;
             out[o + 0] = (unsigned char)(r / samples);
             out[o + 1] = (unsigned char)(g / samples);
             out[o + 2] = (unsigned char)(b / samples);
@@ -246,4 +289,5 @@ bool SoftRenderer::SavePPM(const char* path) const
     return written == out.size();
 }
 
-}  // namespace mlbb_preview
+}  // namespace render
+}  // namespace mlbb

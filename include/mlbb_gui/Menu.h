@@ -30,6 +30,19 @@ struct Config {
     float height = 680.0f;
     bool  resizable = false;   // lets the user drag the bottom-right corner
 
+    // --- phone / hidpi ---------------------------------------------------
+    // Fonts are rasterized at `size * pixelDensity` while everything keeps
+    // being laid out in the logical units above. The renderer draws the menu
+    // with the same density, so on a phone (density ~2) the menu comes out
+    // physically big *and* crisp instead of being stretched after the fact.
+    // 1.0 = desktop, let the app pick something like 2.0 on a phone screen.
+    float pixelDensity = 1.0f;
+
+    // One column instead of sidebar + dashboard, for narrow (portrait) phone
+    // screens. The app turns this on automatically when the screen is taller
+    // than it is wide; the content is then scrolled by dragging.
+    bool  compact = false;
+
     // --- texts ----------------------------------------------------------
     const char* brand    = "spectre";                 // shown next to the icon
     const char* greeting = "Hey,";

@@ -1,15 +1,62 @@
 # mlbb — ImGui меню (SPECTRE)
 
-Меню для Theos-твика: **ImGui 1.83 + Metal**, тема — «тёмно-зелёный терминал»
-в стиле fastfetch: полупрозрачное окно, розовый блочный баннер `SPECTRE`,
-секции с заголовком на рамке, строки `ЛЕЙБЛ | значение` с барами, лог-консоль.
+Меню для Theos-твика: **ImGui 1.83**, тема — «тёмно-зелёный терминал» в стиле
+fastfetch: полупрозрачное окно, розовый блочный баннер `SPECTRE`, секции с
+заголовком на рамке, строки `ЛЕЙБЛ | значение` с барами, лог-консоль.
+
+Запускается и как **отдельное приложение** (`src/app`, SDL2 + софтверный
+рендер, никакого GPU) — так его можно покликать на телефоне через Termux, и как
+**модуль внутри чужого ImGui-бэкенда** (в твике это `ImGuiDrawView.mm` + Metal).
 
 > **Внутри нет никакого функционала.** Ни одного адреса, хука или обращения к
 > игре — только UI. Все тумблеры/слайдеры/комбо хранят собственное состояние в
 > `mlbb::Features`, чтобы виджетам было что показывать. Логика подключается
 > снаружи (см. «Как добавить пункт»).
 
-![ESP](docs/preview/esp.png)
+| десктоп / превью | телефон, портрет | телефон, ландшафт |
+| --- | --- | --- |
+| ![ESP](docs/preview/esp.png) | ![phone portrait](docs/preview/phone-portrait.png) | ![phone landscape](docs/preview/phone-landscape.png) |
+
+## Запуск на телефоне (Android + Termux)
+
+1. Поставить **Termux** (F-Droid) и приложение **Termux:X11** (APK с
+   [github.com/termux/termux-x11/releases](https://github.com/termux/termux-x11/releases)) —
+   это X-сервер, в его окне и живёт меню.
+2. В Termux:
+
+```bash
+pkg install git
+git clone https://github.com/babijon709-netizen/mlbb
+cd mlbb
+./run.sh
+```
+
+`run.sh` сам: поставит `clang make pkg-config sdl2`, подтянет ImGui
+(`git submodule update --init --recursive`), соберёт `build/spectre`, поднимет
+Termux:X11 и запустит меню на весь экран. Тап — клик, свайп — прокрутка.
+
+```bash
+./run.sh --tab 2 --populate      # сразу на вкладке VISUAL, часть тумблеров включена
+./run.sh --windowed 900x600      # окном, не на весь экран
+./run.sh --ui-scale 0.75         # крупнее интерфейс  (см. «Производительность»)
+./run.sh --shot menu.ppm         # просто отрендерить кадр в картинку, окно не нужно
+./run.sh --help                  # все флаги приложения
+```
+
+Без X11 (например, если Termux:X11 ставить не хотите) можно получить картинку:
+
+```bash
+./run.sh --shot menu.ppm && convert menu.ppm menu.png
+```
+
+## Десктоп
+
+```bash
+sudo apt install libsdl2-dev        # Linux;  macOS: brew install sdl2 pkg-config
+make app                            # -> build/spectre
+./build/spectre                     # окно на весь экран
+./build/spectre --windowed 1280x720
+```
 
 ## Что где лежит
 
@@ -18,61 +65,33 @@ include/mlbb_gui/Menu.h      публичный API: Config, Fonts, Features, Dr
 include/mlbb_gui/Theme.h     палитра, метрики, ASCII-арт, ApplyTheme()
 src/Menu.cpp                 вся отрисовка меню (ImDrawList, без стоковых виджетов)
 src/Theme.cpp                стиль ImGui + баннер и эмблема
-tools/preview/               отладочный рендерер меню в картинку (без GPU и без окна)
+src/app/main_sdl.cpp         приложение: окно SDL2, ввод (мышь/тач/клавиатура), бэкдроп
+src/render/SoftRenderer.*    софтверный растеризатор ImDrawData -> RGBA (общий для app и preview)
+tools/preview/               отладочный рендерер меню в картинку (без окна и GPU)
+assets/fonts/                DejaVu Sans Mono (+ Bold) — шрифт по умолчанию
+run.sh                       сборка и запуск одной командой (телефон и десктоп)
+Makefile                     make app / run / shot / clean
 external/imgui               сабмодуль ocornut/imgui, пришпилен на тег v1.83
 docs/preview/                скриншоты
 ```
 
-Своего `main`/точки входа нет — модуль встраивается в существующий ImGui-бэкенд
-(в твике это `ImGuiDrawView.mm`, рендер через `imgui_impl_metal`):
+## Как это устроено
 
-```objc
-// ImGuiDrawView.mm
+* **Никакого GPU.** `SoftRenderer` рисует `ImDrawData` в обычный RGBA-буфер,
+  `src/app` блитит его в оконную поверхность SDL. Поэтому оно работает и в
+  Termux:X11, где аппаратного GL нет, и в CI, и на десктопе.
+* **Плотность пикселей.** `Config::pixelDensity` — во сколько физических
+  пикселей превращается один логический. Шрифты растрируются сразу в этом
+  масштабе (`size * pixelDensity`), а меню продолжает раскладываться в
+  логических единицах, поэтому на телефоне текст крупный **и** резкий, а не
+  растянутый. `src/app` подбирает плотность сам так, чтобы меню почти
+  заполняло экран.
+* **Компактная вёрстка.** Если экран выше, чем шире, `src/app` включает
+  `Config::compact`: окно занимает весь экран, а секции идут одной колонкой и
+  прокручиваются свайпом (тонкий ползунок справа). Ландшафт и десктоп остаются
+  двухколоночными.
 
-// один раз, в -initWithNibName: после ImGui::CreateContext()
-mlbb::theme::ApplyTheme();
-mlbb::Config cfg;
-cfg.fontRegular = "/path/in/bundle/JetBrainsMono-Regular.ttf";
-mlbb::Fonts    fonts = mlbb::LoadFonts(cfg);   // до первого кадра
-mlbb::Features feat;
-
-// каждый кадр, в -drawInMTKView: между ImGui::NewFrame() и ImGui::Render()
-mlbb::DrawMenu(cfg, fonts, feat);
-```
-
-Меню ничего не знает о бэкенде: на Android/десктопе вместо Metal просто
-подставляется свой (`imgui_impl_android` / `imgui_impl_sdl` / …).
-
-## Быстрый старт (превью без устройства)
-
-```bash
-git submodule update --init --recursive   # подтянуть ImGui v1.83
-make -C tools/preview shot                # -> tools/preview/build/menu.png
-```
-
-`make shot` собирает `tools/preview/build/mlbb_preview` и рендерит меню
-софтверным растеризатором (`SoftRenderer.cpp`) — GPU, окно и устройство не
-нужны, подойдёт любой Linux/macOS. Полезные флаги:
-
-```bash
-tools/preview/build/mlbb_preview \
-  --out menu.ppm --display 1400x840 --height 680 \
-  --tab 2 --populate --uptime 42 \
-  --font /path/to/JetBrainsMono-Regular.ttf \
-  --bold /path/to/JetBrainsMono-Bold.ttf
-convert menu.ppm menu.png     # PPM -> PNG (ImageMagick)
-```
-
-| флаг | смысл |
-| --- | --- |
-| `--tab 0..4` | какую вкладку показать (ESP / AIM / VISUAL / MISC / CONFIG) |
-| `--populate` | включить часть тумблеров, чтобы было видно оба состояния |
-| `--uptime N` | сделать вид, что сессия идёт N минут |
-| `--click X,Y` | синтетический клик — удобно проверять реакцию виджетов |
-| `--folded` | показать свёрнутое окно (только заголовок) |
-| `--bg file.ppm` | подложить фон (обои рабочего стола) |
-
-## Подключение к ImGui
+## Подключение к ImGui (твик, Metal)
 
 ```cpp
 #include "mlbb_gui/Menu.h"
@@ -92,14 +111,71 @@ mlbb::DrawMenu(cfg, fonts, feat);
 mlbb::PushLog("match started: %s", heroName);
 ```
 
-Шрифты: `cfg.fontRegular` / `cfg.fontBold` — пути к TTF (например
-JetBrains Mono, Iosevka). Если их не задать, берётся встроенный шрифт ImGui —
-раскладка не поедет, но выглядеть будет менее «терминально». Диапазоны глифов
-уже включают кириллицу, стрелки, рамки и блочные элементы (⠿ нужно для арта).
+Шрифты: `cfg.fontRegular` / `cfg.fontBold` — пути к TTF (в комплекте лежит
+DejaVu Sans Mono, он же используется в скриншотах). Окно само центрируется при
+первом кадре, таскается за полосу вкладок (`ImGuiWindowFlags_NoMove` + свой
+drag-хендлер). Кнопки в полосе: `—` свернуть, `□` разрешить ресайз, `✕` закрыть
+(`feat.windowOpen = false`).
 
-Окно само центрируется при первом кадре, таскается за полосу вкладок
-(`ImGuiWindowFlags_NoMove` + свой drag-хендлер). Кнопки в полосе:
-`—` свернуть, `□` разрешить ресайз, `✕` закрыть (`feat.windowOpen = false`).
+## Превью без устройства
+
+```bash
+git submodule update --init --recursive   # подтянуть ImGui v1.83
+make -C tools/preview shot                # -> tools/preview/build/menu.png
+```
+
+`make shot` собирает `tools/preview/build/mlbb_preview` и рендерит меню
+софтверным растеризатором — GPU, окно и устройство не нужны. Полезные флаги:
+
+```bash
+tools/preview/build/mlbb_preview \
+  --out menu.ppm --display 1400x840 --height 680 \
+  --tab 2 --populate --uptime 42 \
+  --font /path/to/JetBrainsMono-Regular.ttf \
+  --bold /path/to/JetBrainsMono-Bold.ttf
+convert menu.ppm menu.png     # PPM -> PNG (ImageMagick)
+```
+
+| флаг | смысл |
+| --- | --- |
+| `--tab 0..4` | какую вкладку показать (ESP / AIM / VISUAL / MISC / CONFIG) |
+| `--populate` | включить часть тумблеров, чтобы было видно оба состояния |
+| `--uptime N` | сделать вид, что сессия идёт N минут |
+| `--click X,Y` | синтетический клик — удобно проверять реакцию виджетов |
+| `--folded` | показать свёрнутое окно (только заголовок) |
+| `--bg file.ppm` | подложить фон (обои рабочего стола) |
+
+## Флаги приложения
+
+| флаг | смысл |
+| --- | --- |
+| `--window WxH` | окно заданного размера (`--windowed` = 1280x720) |
+| `--density N` | масштаб кадра вручную; по умолчанию подбирается под экран |
+| `--ui-scale N` | множитель к автоматической плотности (меньше — быстрее, но мягче) |
+| `--compact` / `--wide` | заставить телефонную или десктопную вёрстку |
+| `--menu WxH` | логический размер меню (1120x680; на телефоне 440) |
+| `--tab N`, `--populate`, `--folded` | как в превью |
+| `--frames N --out FILE` | отрендерить N кадров и сохранить кадр в PPM (можно без дисплея) |
+| `--click X,Y` | синтетический клик в физических пикселях (для скриншотов) |
+| `--fps N` | ограничение частоты кадров (0 — без ограничения, по умолчанию 60) |
+| `--filter bilinear\|nearest` | фильтрация текстуры шрифта |
+
+Клавиши: `F1..F5` — вкладки, `F11` — полный экран, `F12` — скриншот
+(`spectre-N.ppm`), `Esc` — выход.
+
+## Производительность
+
+Растеризация — на CPU, поэтому цена кадра линейна по числу пикселей:
+на 1080x2400 «как есть» это ~80 мс/кадр на слабой машине и ~15-30 мс на
+телефоне. Если хочется плавнее:
+
+```bash
+./run.sh --ui-scale 0.75     # 0.56x пикселей: заметно быстрее, чуть мягче текст
+./run.sh --fps 30            # вдвое меньше работы и меньше расход батареи
+```
+
+`--ui-scale` умножается на автоматическую плотность, так что 0.75 — это
+«на 25% мельче интерфейс и примерно вдвое легче кадр».
 
 ## Как добавить пункт
 
@@ -118,7 +194,8 @@ const RowSpec kEspRows[] = {
   CONFIG-вкладки растянуты на 4).
 - Новая вкладка = запись в `kTabs[]` + ветка в `DrawTabContent()` и
   `TabContentHeight()`.
-- Новая секция на дашборде = `BeginSection()/Section::Row()` + `InfoRow()`.
+- Новая секция = функция вида `DrawDeviceSection()` и вызов из `DrawSidebar()`
+  (широкая вёрстка) и из `DrawCompactBody()` (телефонная).
 
 Каждый `Toggle/Slider/Combo` автоматически пишет строку в LOG
 (`ESP Box enabled`, `Box Style -> Corner` и т.п.).
@@ -135,6 +212,9 @@ const RowSpec kEspRows[] = {
 └─ футер: Bonsoir! Elliot. · подсказка · цветные точки
 ```
 
+На телефоне в портрете всё то же самое, но одной колонкой:
+`баннер → приветствие → LOGIN → UPTIME → STATUS → вкладка → DEVICE → MODULES → LOG`.
+
 ## Проверка совместимости
 
 `src/Menu.cpp` и `src/Theme.cpp` собираются без изменений и против официального
@@ -147,4 +227,5 @@ g++ -std=c++17 -fsyntax-only -Iinclude -Iexternal/imgui src/Menu.cpp
 ## Лицензия
 
 См. `LICENSE` (репозиторий использовал MIT). ImGui распространяется по своей
-лицензии (MIT) — `external/imgui/LICENSE.txt`.
+лицензии (MIT) — `external/imgui/LICENSE.txt`. Шрифт DejaVu — свободная
+лицензия Bitstream Vera/DejaVu, текст в `assets/fonts/LICENSE-DejaVu.txt`.

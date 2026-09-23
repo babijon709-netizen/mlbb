@@ -1,4 +1,5 @@
 # --- preview tool artefacts ---------------------------------------------------
+build/
 tools/preview/build/
 tools/preview/*.ppm
 tools/preview/*.png

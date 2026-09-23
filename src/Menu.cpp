@@ -95,6 +95,7 @@ struct UiState {
     ImVec2 dragOffset = ImVec2(0.0f, 0.0f);
     bool   wasFolded = false;
     ImVec2 unfoldedSize = ImVec2(0.0f, 0.0f);
+    float  scroll = 0.0f;      // compact layout: pixels the page is scrolled by
     double startedAt = 0.0;
     char   startedDate[32] = { 0 };
 };
@@ -669,16 +670,25 @@ void DrawTabContent(ImDrawList* dl, const Fonts& f, int tab, const ImVec2& origi
 }
 
 // ======================================================= window chrome =======
+// On a phone the strip gets a second row: the tabs move down and span the full
+// width so they stay reachable with a thumb.
+float TitleStripHeight(const Config& cfg)
+{
+    return cfg.compact ? metrics::kTitleH + 32.0f : metrics::kTitleH;
+}
+
 void DrawTitleStrip(ImDrawList* dl, const Fonts& f, Config& cfg, Features& st,
                     const ImVec2& wpos, float w, float bodyTop)
 {
     ImGuiIO& io = ImGui::GetIO();
+    const bool  compact = cfg.compact;
+    const float stripH  = TitleStripHeight(cfg);
 
     // background + bottom hairline
-    dl->AddRectFilled(wpos, V(wpos.x + w, wpos.y + metrics::kTitleH), col::kTitleBg,
+    dl->AddRectFilled(wpos, V(wpos.x + w, wpos.y + stripH), col::kTitleBg,
                       metrics::kRadiusWin, ImDrawFlags_RoundCornersTop);
-    dl->AddLine(V(wpos.x, wpos.y + metrics::kTitleH - 0.5f),
-                V(wpos.x + w, wpos.y + metrics::kTitleH - 0.5f), col::kTitleLine, 1.0f);
+    dl->AddLine(V(wpos.x, wpos.y + stripH - 0.5f),
+                V(wpos.x + w, wpos.y + stripH - 0.5f), col::kTitleLine, 1.0f);
 
     const float controlsW = 3.0f * 30.0f + 8.0f;
 
@@ -692,28 +702,36 @@ void DrawTitleStrip(ImDrawList* dl, const Fonts& f, Config& cfg, Features& st,
 
     const char* name = cfg.windowTitle ? cfg.windowTitle : "mlbb";
     float x = i1.x + 10.0f;
-    const float titleY = wpos.y + (metrics::kTitleH - f.boldSize) * 0.5f;
-    Text(dl, f.bold, f.boldSize, V(x, titleY), col::kTextBright, name);
-    x += TextW(f.bold, f.boldSize, name);
+    if (!compact) {
+        const float titleY = wpos.y + (metrics::kTitleH - f.boldSize) * 0.5f;
+        Text(dl, f.bold, f.boldSize, V(x, titleY), col::kTextBright, name);
+        x += TextW(f.bold, f.boldSize, name);
 
-    // build tag
-    char buildTag[64];
-    std::snprintf(buildTag, sizeof(buildTag), "build %s", cfg.build ? cfg.build : "0x0000");
-    x += 12.0f;
-    Text(dl, f.small, f.smallSize, V(x, wpos.y + (metrics::kTitleH - f.smallSize) * 0.5f), col::kTextDim, buildTag);
-    x += TextW(f.small, f.smallSize, buildTag) + 16.0f;
+        // build tag
+        char buildTag[64];
+        std::snprintf(buildTag, sizeof(buildTag), "build %s", cfg.build ? cfg.build : "0x0000");
+        x += 12.0f;
+        Text(dl, f.small, f.smallSize, V(x, wpos.y + (metrics::kTitleH - f.smallSize) * 0.5f), col::kTextDim, buildTag);
+        x += TextW(f.small, f.smallSize, buildTag) + 16.0f;
 
-    // separator
-    dl->AddLine(V(x, wpos.y + 11.0f), V(x, wpos.y + metrics::kTitleH - 11.0f), col::kSeparator, 1.0f);
-    x += 14.0f;
+        // separator
+        dl->AddLine(V(x, wpos.y + 11.0f), V(x, wpos.y + metrics::kTitleH - 11.0f), col::kSeparator, 1.0f);
+        x += 14.0f;
+    }
 
     // ---- tabs
-    const float tabH = 26.0f;
-    const float tabTop = wpos.y + metrics::kTitleH - tabH - 2.0f;
+    ImFont*     tabFont = compact ? f.small : f.bold;
+    const float tabSize = compact ? f.smallSize : f.boldSize;
+    const float tabPad  = compact ? 12.0f : 30.0f;
+    const float tabH    = compact ? 24.0f : 26.0f;
+    const float tabTop  = compact ? wpos.y + stripH - tabH - 2.0f
+                                  : wpos.y + metrics::kTitleH - tabH - 2.0f;
+    const float tabEnd  = compact ? wpos.x + w - 8.0f : wpos.x + w - controlsW - 8.0f;
+    if (compact) x = wpos.x + 12.0f;
     for (int i = 0; i < kTabCount; ++i) {
         const char* label = kTabs[i].name;
-        const float tw = TextW(f.bold, f.boldSize, label) + 30.0f;
-        if (x + tw > wpos.x + w - controlsW - 8.0f) break;
+        const float tw = TextW(tabFont, tabSize, label) + tabPad * 2.0f;
+        if (x + tw > tabEnd) break;
 
         char id[32];
         std::snprintf(id, sizeof(id), "##tab%d", i);
@@ -724,22 +742,22 @@ void DrawTitleStrip(ImDrawList* dl, const Fonts& f, Config& cfg, Features& st,
 
         const bool sel = (st.tab == i);
         const ImVec2 t0 = V(x, sel ? tabTop : tabTop + 2.0f);
-        const ImVec2 t1 = V(x + tw, wpos.y + metrics::kTitleH);
+        const ImVec2 t1 = V(x + tw, compact ? wpos.y + stripH : wpos.y + metrics::kTitleH);
         if (sel) {
             dl->AddRectFilled(t0, t1, col::kPanelBgAlt, 7.0f, ImDrawFlags_RoundCornersTop);
             dl->AddLine(V(t0.x + 1.0f, t1.y - 0.5f), V(t1.x - 1.0f, t1.y - 0.5f), IM_COL32(255, 150, 205, 70), 1.6f);
         } else if (hovered) {
             dl->AddRectFilled(t0, t1, col::kHover, 7.0f, ImDrawFlags_RoundCornersTop);
         }
-        TextCenter(dl, f.bold, f.boldSize, V(x, t0.y), V(x + tw, t1.y),
+        TextCenter(dl, tabFont, tabSize, V(x, t0.y), V(x + tw, t1.y),
                    sel ? col::kTextBright : (hovered ? col::kTextValue : col::kTextDim), label);
         x += tw + 4.0f;
     }
 
     // decorative "+" as in the reference tab strip
     const float plusX = x + 8.0f;
-    if (plusX < wpos.x + w - controlsW - 8.0f) {
-        const float cy = wpos.y + metrics::kTitleH * 0.5f + 1.0f;
+    if (plusX < tabEnd) {
+        const float cy = (compact ? tabTop + tabH * 0.5f : wpos.y + metrics::kTitleH * 0.5f) + 1.0f;
         dl->AddLine(V(plusX - 5.0f, cy), V(plusX + 5.0f, cy), col::kTextDim, 1.4f);
         dl->AddLine(V(plusX, cy - 5.0f), V(plusX, cy + 5.0f), col::kTextDim, 1.4f);
     }
@@ -774,7 +792,9 @@ void DrawTitleStrip(ImDrawList* dl, const Fonts& f, Config& cfg, Features& st,
             if (i == 2) { st.windowOpen = false; }
         }
     }
-    // ---- drag area
+    // ---- drag area (the compact window fills the screen, so it never moves)
+    if (compact) return;
+
     // Submitted last: an active tab/button already owns ActiveId, so pressing a
     // tab never starts a window drag. ImGuiWindowFlags_NoMove keeps ImGui's own
     // "drag anywhere" behaviour out of the way.
@@ -818,51 +838,77 @@ void DrawFooter(ImDrawList* dl, const Fonts& f, const Config& cfg, const ImVec2&
                                      midY - f.smallSize * 0.5f), col::kTextDim, hint);
 }
 
-// ============================================================== sidebar ======
-void DrawSidebar(ImDrawList* dl, const Fonts& f, const Config& cfg, const Features& st,
-                 const ImVec2& pos, float w, float h)
-{
-    float y = pos.y;
+// ====================================================== shared sections ======
+// The building blocks of the menu. The desktop layout arranges them in two
+// columns (sidebar on the left, dashboard on the right); the compact layout
+// used on a phone stacks the very same functions in one scrollable column.
 
-    // ---- pink block-letter banner, auto-fitted to the column
-    const float kArtRef = 16.0f;   // banner is measured at a fixed size, then scaled
+const float kArtRef = 16.0f;   // art is measured at this size, then scaled
+
+struct BannerFit {
+    int   rows = 0;
+    float size = 0.0f;     // size the art is drawn at
+    float line = 0.0f;     // line step
+    float height = 0.0f;   // art + caption
+};
+
+// The banner is measured at a fixed reference size and then scaled so that it
+// fills the column exactly - the block letters tile seamlessly at any width.
+BannerFit FitBanner(const Fonts& f, float w)
+{
     float artW = 1.0f;
-    int   artRows = 0;
+    int   rows = 0;
     for (int i = 0; kBanner[i]; ++i) {
         artW = Max(artW, TextW(f.art, kArtRef, kBanner[i]));
-        ++artRows;
+        ++rows;
     }
-    const float artSize = kArtRef * (w / artW);
+
+    BannerFit fit;
+    fit.rows = rows;
+    fit.size = kArtRef * (w / artW);
     // Row step = the font's real line height, so block glyphs tile seamlessly.
     const float lineRatio = f.art ? (f.art->Ascent - f.art->Descent) / Max(1.0f, f.art->FontSize) : 1.2f;
-    const float artLine = artSize * lineRatio;
-    for (int i = 0; i < artRows; ++i) {
+    fit.line   = fit.size * lineRatio;
+    fit.height = (float)rows * fit.line + 4.0f + 30.0f;
+    return fit;
+}
+
+float DrawBannerArt(ImDrawList* dl, const Fonts& f, const ImVec2& pos, float w)
+{
+    const BannerFit fit = FitBanner(f, w);
+    for (int i = 0; i < fit.rows; ++i) {
         const ImU32 c = (i < 2) ? col::kPinkBright : (i < 4 ? col::kPink : col::kPinkDim);
-        Text(dl, f.art, artSize, V(pos.x, y + i * artLine), c, kBanner[i]);
+        Text(dl, f.art, fit.size, V(pos.x, pos.y + (float)i * fit.line), c, kBanner[i]);
     }
-    y += artRows * artLine + 4.0f;
+    float y = pos.y + (float)fit.rows * fit.line + 4.0f;
 
     // ---- caption under the banner
     dl->AddLine(V(pos.x, y + 8.0f), V(pos.x + w * 0.32f, y + 8.0f), IM_COL32(255, 150, 205, 70), 1.0f);
     Text(dl, f.small, f.smallSize, V(pos.x, y + 16.0f), col::kTextDim, "external toolkit");
     TextRight(dl, f.bold, f.boldSize, pos.x + w, y + 13.0f, col::kPink, "v2.0");
     y += 30.0f;
+    return y - pos.y;
+}
 
-    // ---- device section (static placeholder data - nothing is queried)
-    const int devRows = 4;
-    const float devH = SectionHeight(devRows, metrics::kRowH);
-    Section dev = BeginSection(dl, f, "DEVICE", V(pos.x, y), w, devH);
+// DEVICE - static placeholder data, nothing is queried anywhere.
+float DrawDeviceSection(ImDrawList* dl, const Fonts& f, const Config& cfg, const ImVec2& pos, float w)
+{
+    const float h = SectionHeight(4, metrics::kRowH);
+    Section dev = BeginSection(dl, f, "DEVICE", pos, w, h);
     InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "MODEL", "iPhone 15,2", -1.0f, nullptr);
-    InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "SYSTEM", "iOS 17.4 · rootless", -1.0f, nullptr);
-    InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "RENDER", "Metal · ImGui 1.83", -1.0f, nullptr);
+    InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "SYSTEM", "iOS 17.4 \xc2\xb7 rootless", -1.0f, nullptr);
+    InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "RENDER", "Metal \xc2\xb7 ImGui 1.83", -1.0f, nullptr);
     InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "BUILD", cfg.build ? cfg.build : "-", -1.0f, nullptr);
-    y += devH + metrics::kSectionGap;
+    return h;
+}
 
-    // ---- modules section, mirrors what is toggled in the tabs
-    const int espOn = (st.espBox ? 1 : 0) + (st.espSkeleton ? 1 : 0) + (st.espLine ? 1 : 0) + (st.espHealthBar ? 1 : 0)
-                    + (st.espName ? 1 : 0) + (st.espDistance ? 1 : 0) + (st.espIcon ? 1 : 0) + (st.espTeamCheck ? 1 : 0);
-    const int visOn = (st.visMapHack ? 1 : 0) + (st.visSkillCd ? 1 : 0) + (st.visSpellCd ? 1 : 0)
-                    + (st.visDroneView ? 1 : 0) + (st.visZoomOut ? 1 : 0);
+// MODULES - mirrors what is toggled in the tabs.
+float DrawModulesSection(ImDrawList* dl, const Fonts& f, const Features& st, const ImVec2& pos, float w)
+{
+    const int espOn  = (st.espBox ? 1 : 0) + (st.espSkeleton ? 1 : 0) + (st.espLine ? 1 : 0) + (st.espHealthBar ? 1 : 0)
+                     + (st.espName ? 1 : 0) + (st.espDistance ? 1 : 0) + (st.espIcon ? 1 : 0) + (st.espTeamCheck ? 1 : 0);
+    const int visOn  = (st.visMapHack ? 1 : 0) + (st.visSkillCd ? 1 : 0) + (st.visSpellCd ? 1 : 0)
+                     + (st.visDroneView ? 1 : 0) + (st.visZoomOut ? 1 : 0);
     const int miscOn = (st.miscAntiBan ? 1 : 0) + (st.miscBypass ? 1 : 0) + (st.miscRetri ? 1 : 0)
                      + (st.miscNoGrass ? 1 : 0) + (st.miscRecall ? 1 : 0);
 
@@ -872,41 +918,133 @@ void DrawSidebar(ImDrawList* dl, const Fonts& f, const Config& cfg, const Featur
     std::snprintf(visBuf,  sizeof(visBuf),  "%d / 5 active", visOn);
     std::snprintf(miscBuf, sizeof(miscBuf), "%d / 5 active", miscOn);
 
-    const float espPct  = (float)espOn / 8.0f;
-    const float aimPct  = st.aimEnabled ? 1.0f : 0.0f;
-    const float visPct  = (float)visOn / 5.0f;
-    const float miscPct = (float)miscOn / 5.0f;
+    const float h = SectionHeight(4, metrics::kRowH);
+    Section mod = BeginSection(dl, f, "MODULES", pos, w, h);
+    InfoRow(dl, f, V(mod.inner.x, mod.Row(metrics::kRowH)), mod.innerW, metrics::kRowH, "ESP",    espBuf,  (float)espOn / 8.0f,  nullptr);
+    InfoRow(dl, f, V(mod.inner.x, mod.Row(metrics::kRowH)), mod.innerW, metrics::kRowH, "AIM",    aimBuf,  st.aimEnabled ? 1.0f : 0.0f, nullptr);
+    InfoRow(dl, f, V(mod.inner.x, mod.Row(metrics::kRowH)), mod.innerW, metrics::kRowH, "VISUAL", visBuf,  (float)visOn / 5.0f,  nullptr);
+    InfoRow(dl, f, V(mod.inner.x, mod.Row(metrics::kRowH)), mod.innerW, metrics::kRowH, "MISC",   miscBuf, (float)miscOn / 5.0f, nullptr);
+    return h;
+}
 
-    const int modRows = 4;
-    const float modH = SectionHeight(modRows, metrics::kRowH);
-    Section mod = BeginSection(dl, f, "MODULES", V(pos.x, y), w, modH);
-    InfoRow(dl, f, V(mod.inner.x, mod.Row(metrics::kRowH)), mod.innerW, metrics::kRowH, "ESP",    espBuf,  espPct,  nullptr);
-    InfoRow(dl, f, V(mod.inner.x, mod.Row(metrics::kRowH)), mod.innerW, metrics::kRowH, "AIM",    aimBuf,  aimPct,  nullptr);
-    InfoRow(dl, f, V(mod.inner.x, mod.Row(metrics::kRowH)), mod.innerW, metrics::kRowH, "VISUAL", visBuf,  visPct,  nullptr);
-    InfoRow(dl, f, V(mod.inner.x, mod.Row(metrics::kRowH)), mod.innerW, metrics::kRowH, "MISC",   miscBuf, miscPct, nullptr);
-    y += modH + metrics::kSectionGap;
+// LOG console, clipped to exactly `h` pixels.
+float DrawLogSection(ImDrawList* dl, const Fonts& f, const ImVec2& pos, float w, float h)
+{
+    Section log = BeginSection(dl, f, "LOG", pos, w, h);
+    const float lineH = f.smallSize * 1.62f;
+    const int   fits  = (int)((h - metrics::kSectionHead - metrics::kSectionPad * 2.0f) / lineH);
+    dl->PushClipRect(log.inner, V(log.max.x - 2.0f, log.max.y - 4.0f), true);
+    for (int i = 0; i < fits; ++i) {
+        const LogEntry* e = LogAt(fits - 1 - i);   // newest entry goes to the bottom
+        if (!e) continue;
+        char line[128];
+        std::snprintf(line, sizeof(line), "[%s] %s", e->time, e->text);
+        Text(dl, f.small, f.smallSize,
+             V(log.inner.x, log.inner.y + (float)(fits - 1 - i) * lineH),
+             (i == 0) ? col::kAccentBright : col::kTextDim, line);
+    }
+    dl->PopClipRect();
+    return h;
+}
+
+float DrawLoginSection(ImDrawList* dl, const Fonts& f, const Config& cfg, const ImVec2& pos, float w, const char* startStamp)
+{
+    const float h = SectionHeight(1, metrics::kRowH * 2.0f);
+    Section login = BeginSection(dl, f, "LOGIN", pos, w, h);
+    char buf[128];
+    std::snprintf(buf, sizeof(buf), "%s // %s", cfg.account ? cfg.account : "-", startStamp);
+    InfoRow(dl, f, V(login.inner.x, login.Row(metrics::kRowH * 2.0f)), login.innerW, metrics::kRowH * 2.0f,
+            "ACCOUNT", buf, -1.0f, nullptr);
+    return h;
+}
+
+float DrawUptimeSection(ImDrawList* dl, const Fonts& f, const ImVec2& pos, float w,
+                        const char* uptime, const char* nowStamp)
+{
+    const float h = SectionHeight(2, metrics::kRowH);
+    Section up = BeginSection(dl, f, "UPTIME / DATE", pos, w, h);
+    InfoRow(dl, f, V(up.inner.x, up.Row(metrics::kRowH)), up.innerW, metrics::kRowH, "UPTIME", uptime, -1.0f, nullptr);
+    InfoRow(dl, f, V(up.inner.x, up.Row(metrics::kRowH)), up.innerW, metrics::kRowH, "DATE", nowStamp, -1.0f, nullptr);
+    return h;
+}
+
+// STATUS - the fastfetch block of the reference. Placeholder numbers as well.
+float DrawStatusSection(ImDrawList* dl, const Fonts& f, const ImVec2& pos, float w)
+{
+    struct StatusRow { const char* label; const char* value; float pct; const char* pctText; };
+    const StatusRow rows[] = {
+        { "CPU",   "44 % \xc2\xb7 6 cores",        0.44f, "44%"  },
+        { "GPU",   "Apple A17 Pro \xc2\xb7 61 %",  0.61f, "61%"  },
+        { "FPS",   "120 / 120 fps",                1.00f, "100%" },
+        { "PING",  "18 ms \xc2\xb7 jitter 3 ms",   0.12f, "12%"  },
+        { "RAM",   "12.61 GiB / 15.89 GiB",        0.79f, "79%"  },
+        { "VRAM",  "3.42 GiB / 8.00 GiB",          0.43f, "43%"  },
+    };
+    const int rowCount = (int)(sizeof(rows) / sizeof(rows[0]));
+    const float h = SectionHeight(rowCount, metrics::kRowH);
+    Section status = BeginSection(dl, f, "STATUS", pos, w, h);
+    for (int i = 0; i < rowCount; ++i)
+        InfoRow(dl, f, V(status.inner.x, status.Row(metrics::kRowH)), status.innerW, metrics::kRowH,
+                rows[i].label, rows[i].value, rows[i].pct, rows[i].pctText);
+    return h;
+}
+
+// The rows of the active tab. maxH <= 0 asks for the natural height.
+float DrawActiveTabPanel(ImDrawList* dl, const Fonts& f, Features& st, const ImVec2& pos, float w, float maxH)
+{
+    const TabSpec& tab = kTabs[ClampI(st.tab, 0, kTabCount - 1)];
+    const float colGap = 12.0f, rowGap = 8.0f;
+    const float contentH = TabContentHeight(st.tab, w - metrics::kSectionPad * 2.0f, colGap, rowGap, f);
+    const float wantedH  = metrics::kSectionHead + metrics::kSectionPad * 2.0f + contentH;
+    const float h = (maxH > 0.0f) ? Min(wantedH, Max(maxH, 80.0f)) : wantedH;
+
+    Section panel = BeginSection(dl, f, tab.name, pos, w, h);
+    TextRight(dl, f.small, f.smallSize, panel.max.x - metrics::kSectionPad,
+              panel.min.y - f.smallSize * 0.5f - 1.0f, col::kTextDim, tab.caption);
+
+    dl->PushClipRect(panel.inner, V(panel.max.x, panel.max.y - 4.0f), true);
+    DrawTabContent(dl, f, st.tab, panel.inner, panel.innerW, panel.max.y - 6.0f, st);
+    dl->PopClipRect();
+    return h;
+}
+
+float DrawGreeting(ImDrawList* dl, const Fonts& f, const Config& cfg, const ImVec2& pos, float w)
+{
+    float x = pos.x;
+    Text(dl, f.title, f.titleSize, V(x, pos.y + 2.0f), col::kAccent, cfg.greeting ? cfg.greeting : "Hey,");
+    x += TextW(f.title, f.titleSize, cfg.greeting ? cfg.greeting : "Hey,") + 8.0f;
+    Text(dl, f.title, f.titleSize, V(x, pos.y + 2.0f), col::kTextBright, cfg.account ? cfg.account : "");
+
+    // pulsing online chip on the right
+    const float pulse = 0.55f + 0.45f * (float)std::sin(ImGui::GetTime() * 2.2);
+    const ImU32 dotCol = IM_COL32(113, 220, 120, (int)(90 + 150 * pulse));
+    const char* chip = "ATTACHED";
+    const float chipW = TextW(f.small, f.smallSize, chip);
+    const float chipRight = pos.x + w - 118.0f;   // keep clear of the title strip buttons
+    Text(dl, f.small, f.smallSize, V(chipRight - chipW, pos.y + 4.0f), col::kTextDim, chip);
+    dl->AddCircleFilled(V(chipRight + 8.0f, pos.y + 9.0f), 3.4f, dotCol, 16);
+
+    return f.titleSize + 14.0f;
+}
+
+// ============================================================== sidebar ======
+void DrawSidebar(ImDrawList* dl, const Fonts& f, const Config& cfg, const Features& st,
+                 const ImVec2& pos, float w, float h)
+{
+    float y = pos.y;
+    y += DrawBannerArt(dl, f, V(pos.x, y), w);
+    y += DrawDeviceSection(dl, f, cfg, V(pos.x, y), w) + metrics::kSectionGap;
+    y += DrawModulesSection(dl, f, st, V(pos.x, y), w) + metrics::kSectionGap;
 
     // ---- log console: everything that is left in the column
     const float logSpace = pos.y + h - y;
     if (logSpace >= 74.0f) {
-        Section log = BeginSection(dl, f, "LOG", V(pos.x, y), w, logSpace);
-        const float lineH = f.smallSize * 1.62f;
-        const int   fits  = (int)((logSpace - metrics::kSectionHead - metrics::kSectionPad * 2.0f) / lineH);
-        dl->PushClipRect(log.inner, V(log.max.x - 2.0f, log.max.y - 4.0f), true);
-        for (int i = 0; i < fits; ++i) {
-            const LogEntry* e = LogAt(fits - 1 - i);   // newest entry goes to the bottom
-            if (!e) continue;
-            char line[128];
-            std::snprintf(line, sizeof(line), "[%s] %s", e->time, e->text);
-            Text(dl, f.small, f.smallSize,
-                 V(log.inner.x, log.inner.y + (float)(fits - 1 - i) * lineH),
-                 (i == 0) ? col::kAccentBright : col::kTextDim, line);
-        }
-        dl->PopClipRect();
+        DrawLogSection(dl, f, V(pos.x, y), w, logSpace);
         y += logSpace;
     }
 
     // ---- emblem: only drawn when a resize leaves a comfortable gap
+    const BannerFit fit = FitBanner(f, w);
     float emW = 1.0f;
     int   emRows = 0;
     for (int i = 0; kEmblem[i]; ++i) {
@@ -916,15 +1054,15 @@ void DrawSidebar(ImDrawList* dl, const Fonts& f, const Config& cfg, const Featur
     const float emSpace = pos.y + h - y - 10.0f;
     if (emSpace < 200.0f) return;
     const float emFit = emSpace / ((float)emRows * 1.18f);
-    const float emSize = Min(Min(kArtRef * (w / emW), artSize * 1.05f), emFit);
-    const float emLine = emSize * lineRatio;
-    const float emH = emRows * emLine;
+    const float emSize = Min(Min(kArtRef * (w / emW), fit.size * 1.05f), emFit);
+    const float emLine = emSize * (fit.size > 0.0f ? fit.line / fit.size : 1.2f);
+    const float emH = (float)emRows * emLine;
     const float emWidth = TextW(f.art, emSize, kEmblem[0]);
     if (emSize >= 7.0f && y + emH < pos.y + h) {
         const float ex = pos.x + (w - emWidth) * 0.5f;
         for (int i = 0; i < emRows; ++i) {
             const ImU32 c = (i == 4) ? col::kPinkBright : col::kPinkDim;
-            Text(dl, f.art, emSize, V(ex, y + i * emLine), c, kEmblem[i]);
+            Text(dl, f.art, emSize, V(ex, y + (float)i * emLine), c, kEmblem[i]);
         }
     }
 }
@@ -935,79 +1073,80 @@ void DrawDashboard(ImDrawList* dl, const Fonts& f, const Config& cfg, Features& 
                    const char* uptime, const char* startStamp, const char* nowStamp)
 {
     float y = pos.y;
-
-    // ---- greeting
-    float x = pos.x;
-    Text(dl, f.title, f.titleSize, V(x, y + 2.0f), col::kAccent, cfg.greeting ? cfg.greeting : "Hey,");
-    x += TextW(f.title, f.titleSize, cfg.greeting ? cfg.greeting : "Hey,") + 8.0f;
-    Text(dl, f.title, f.titleSize, V(x, y + 2.0f), col::kTextBright, cfg.account ? cfg.account : "");
-
-    // pulsing online chip on the right
-    const float pulse = 0.55f + 0.45f * (float)std::sin(ImGui::GetTime() * 2.2);
-    const ImU32 dotCol = IM_COL32(113, 220, 120, (int)(90 + 150 * pulse));
-    const char* chip = "ATTACHED";
-    const float chipW = TextW(f.small, f.smallSize, chip);
-    const float chipRight = pos.x + w - 118.0f;   // keep clear of the title strip buttons
-    Text(dl, f.small, f.smallSize, V(chipRight - chipW, y + 4.0f), col::kTextDim, chip);
-    dl->AddCircleFilled(V(chipRight + 8.0f, y + 9.0f), 3.4f, dotCol, 16);
-
-    y += f.titleSize + 14.0f;
+    y += DrawGreeting(dl, f, cfg, V(pos.x, y), w);
 
     // ---- LOGIN + UPTIME / DATE, side by side
     const float gap = metrics::kColumnGap;
     const float halfW = (w - gap) * 0.5f;
-    const float rowH = metrics::kRowH;
-
-    // Both boxes end up the same height; LOGIN holds one tall row, the other two
-    // half-height rows.
-    const float loginH = SectionHeight(1, rowH * 2.0f);
-    Section login = BeginSection(dl, f, "LOGIN", V(pos.x, y), halfW, loginH);
-    char loginBuf[128];
-    std::snprintf(loginBuf, sizeof(loginBuf), "%s // %s", cfg.account ? cfg.account : "-", startStamp);
-    InfoRow(dl, f, V(login.inner.x, login.Row(rowH * 2.0f)), login.innerW, rowH * 2.0f, "ACCOUNT", loginBuf, -1.0f, nullptr);
-
-    Section up = BeginSection(dl, f, "UPTIME / DATE", V(pos.x + halfW + gap, y), halfW, loginH);
-    InfoRow(dl, f, V(up.inner.x, up.Row(rowH)), up.innerW, rowH, "UPTIME", uptime, -1.0f, nullptr);
-    InfoRow(dl, f, V(up.inner.x, up.Row(rowH)), up.innerW, rowH, "DATE", nowStamp, -1.0f, nullptr);
-
+    const float loginH = DrawLoginSection(dl, f, cfg, V(pos.x, y), halfW, startStamp);
+    DrawUptimeSection(dl, f, V(pos.x + halfW + gap, y), halfW, uptime, nowStamp);
     y += loginH + metrics::kSectionGap;
 
-    // ---- system status, the fastfetch block of the reference
-    struct StatusRow { const char* label; const char* value; float pct; const char* pctText; };
-    const StatusRow rows[] = {
-        { "CPU",   "44 % · 6 cores",              0.44f, "44%"  },
-        { "GPU",   "Apple A17 Pro · 61 %",        0.61f, "61%"  },
-        { "FPS",   "120 / 120 fps",               1.00f, "100%" },
-        { "PING",  "18 ms · jitter 3 ms",         0.12f, "12%"  },
-        { "RAM",   "12.61 GiB / 15.89 GiB",       0.79f, "79%"  },
-        { "VRAM",  "3.42 GiB / 8.00 GiB",         0.43f, "43%"  },
-    };
-    const int statusRows = (int)(sizeof(rows) / sizeof(rows[0]));
-    const float statusH = SectionHeight(statusRows, rowH);
-    Section status = BeginSection(dl, f, "STATUS", V(pos.x, y), w, statusH);
-    for (int i = 0; i < statusRows; ++i) {
-        InfoRow(dl, f, V(status.inner.x, status.Row(rowH)), status.innerW, rowH,
-                rows[i].label, rows[i].value, rows[i].pct, rows[i].pctText);
-    }
-    y += statusH + metrics::kSectionGap;
+    y += DrawStatusSection(dl, f, V(pos.x, y), w) + metrics::kSectionGap;
 
-    // ---- active tab
-    const TabSpec& tab = kTabs[ClampI(st.tab, 0, kTabCount - 1)];
-    const float colGap = 12.0f, rowGap = 8.0f;
-    const float contentH = TabContentHeight(st.tab, w - metrics::kSectionPad * 2.0f, colGap, rowGap, f);
-    const float wantedH = metrics::kSectionHead + metrics::kSectionPad * 2.0f + contentH;
+    // ---- the active tab fills whatever is left of the column
     const float availH = pos.y + h - y - metrics::kSectionGap;
-    const float tabH = Min(wantedH, Max(availH, 80.0f));   // never taller than its content
+    y += DrawActiveTabPanel(dl, f, st, V(pos.x, y), w, availH) + metrics::kSectionGap;
+    (void)y;
+}
 
-    Section panel = BeginSection(dl, f, tab.name, V(pos.x, y), w, tabH);
-    TextRight(dl, f.small, f.smallSize, panel.max.x - metrics::kSectionPad,
-              panel.min.y - f.smallSize * 0.5f - 1.0f, col::kTextDim, tab.caption);
+// ====================================================== compact (phone) ======
+// One column that is scrolled by dragging - what the menu looks like on a
+// phone in portrait. Exactly the same sections, just stacked.
+const float kCompactLogH = 132.0f;
 
-    dl->PushClipRect(panel.inner, V(panel.max.x, panel.max.y - 4.0f), true);
-    DrawTabContent(dl, f, st.tab, panel.inner, panel.innerW, panel.max.y - 6.0f, st);
-    dl->PopClipRect();
+float CompactContentHeight(const Fonts& f, const Features& st, float w)
+{
+    float h = 0.0f;
+    h += FitBanner(f, w).height + metrics::kSectionGap;
+    h += f.titleSize + 14.0f + metrics::kSectionGap;
+    h += SectionHeight(1, metrics::kRowH * 2.0f) + metrics::kSectionGap;
+    h += SectionHeight(2, metrics::kRowH) + metrics::kSectionGap;
+    h += SectionHeight(6, metrics::kRowH) + metrics::kSectionGap;
+    h += metrics::kSectionHead + metrics::kSectionPad * 2.0f
+       + TabContentHeight(st.tab, w - metrics::kSectionPad * 2.0f, 12.0f, 8.0f, f) + metrics::kSectionGap;
+    h += SectionHeight(4, metrics::kRowH) + metrics::kSectionGap;
+    h += SectionHeight(4, metrics::kRowH) + metrics::kSectionGap;
+    h += kCompactLogH;
+    return h;
+}
 
-    y += tabH + metrics::kSectionGap;
+void DrawCompactBody(ImDrawList* dl, const Fonts& f, Config& cfg, Features& st,
+                     const ImVec2& pos, float w, float viewH,
+                     const char* uptime, const char* startStamp, const char* nowStamp)
+{
+    const float contentH  = CompactContentHeight(f, st, w);
+    const float maxScroll = Max(0.0f, contentH - viewH);
+    g_ui.scroll = ClampF(g_ui.scroll, 0.0f, maxScroll);
+
+    float y = pos.y - g_ui.scroll;
+    y += DrawBannerArt(dl, f, V(pos.x, y), w) + metrics::kSectionGap;
+    y += DrawGreeting(dl, f, cfg, V(pos.x, y), w) + metrics::kSectionGap;
+    y += DrawLoginSection(dl, f, cfg, V(pos.x, y), w, startStamp) + metrics::kSectionGap;
+    y += DrawUptimeSection(dl, f, V(pos.x, y), w, uptime, nowStamp) + metrics::kSectionGap;
+    y += DrawStatusSection(dl, f, V(pos.x, y), w) + metrics::kSectionGap;
+    y += DrawActiveTabPanel(dl, f, st, V(pos.x, y), w, 0.0f) + metrics::kSectionGap;
+    y += DrawDeviceSection(dl, f, cfg, V(pos.x, y), w) + metrics::kSectionGap;
+    y += DrawModulesSection(dl, f, st, V(pos.x, y), w) + metrics::kSectionGap;
+    y += DrawLogSection(dl, f, V(pos.x, y), w, kCompactLogH);
+
+    // ---- touch scrolling: any drag that no widget claimed moves the page
+    ImGui::SetCursorScreenPos(pos);
+    ImGui::InvisibleButton("##page_scroll", V(w, viewH));
+    if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+        g_ui.scroll -= ImGui::GetIO().MouseDelta.y;
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) && ImGui::GetIO().MouseWheel != 0.0f)
+        g_ui.scroll -= ImGui::GetIO().MouseWheel * 48.0f;
+    g_ui.scroll = ClampF(g_ui.scroll, 0.0f, maxScroll);
+
+    // ---- thin scrollbar, only when there is something to scroll
+    if (maxScroll > 1.0f) {
+        const float trackX = pos.x + w + metrics::kPad - 6.0f;
+        const float thumbH = Max(36.0f, viewH * (viewH / contentH));
+        const float thumbY = pos.y + (viewH - thumbH) * (g_ui.scroll / maxScroll);
+        dl->AddRectFilled(V(trackX, thumbY), V(trackX + 3.0f, thumbY + thumbH), IM_COL32(163, 255, 168, 110), 2.0f);
+    }
+    (void)y;
 }
 
 // ================================================================ menu =======
@@ -1028,32 +1167,44 @@ void DrawMenuInternal(Config& cfg, Fonts& fonts, Features& st)
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
         ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
         ImGuiWindowFlags_NoSavedSettings |
-        (st.unlocked ? 0 : ImGuiWindowFlags_NoResize);
+        ((st.unlocked && !cfg.compact) ? 0 : ImGuiWindowFlags_NoResize);
 
-    // First use: centre the window on the screen.
-    if (!g_ui.placed) {
+    if (cfg.compact) {
+        // Phone layout: the window covers the whole canvas and the content
+        // scrolls inside it, so there is nothing to place or resize.
         g_ui.placed = true;
-        ImGui::SetNextWindowPos(V(Max(0.0f, (io.DisplaySize.x - cfg.width) * 0.5f),
-                                  Max(0.0f, (io.DisplaySize.y - cfg.height) * 0.5f)), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(V(0.0f, 0.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(V(io.DisplaySize.x, st.folded ? TitleStripHeight(cfg) : io.DisplaySize.y), ImGuiCond_Always);
+    } else {
+        // First use: centre the window on the screen.
+        if (!g_ui.placed) {
+            g_ui.placed = true;
+            ImGui::SetNextWindowPos(V(Max(0.0f, (io.DisplaySize.x - cfg.width) * 0.5f),
+                                      Max(0.0f, (io.DisplaySize.y - cfg.height) * 0.5f)), ImGuiCond_Always);
+        }
+
+        // ---- size / folding
+        const float foldedH = metrics::kTitleH + metrics::kPad * 2.0f;
+        if (st.folded && !g_ui.wasFolded) {
+            g_ui.unfoldedSize = ImGui::GetWindowSize();
+            g_ui.wasFolded = true;
+        }
+        if (!st.folded && g_ui.wasFolded) {
+            ImGui::SetNextWindowSize(g_ui.unfoldedSize.x > 1.0f ? g_ui.unfoldedSize : V(cfg.width, cfg.height), ImGuiCond_Always);
+            g_ui.wasFolded = false;
+        }
+        if (st.folded) ImGui::SetNextWindowSize(V(cfg.width, foldedH), ImGuiCond_Always);
+        else if (!st.unlocked) ImGui::SetNextWindowSize(V(cfg.width, cfg.height), ImGuiCond_Always);
+
+        if (!st.folded) {
+            const float minW = 900.0f, minH = 420.0f;
+            ImGui::SetNextWindowSizeConstraints(V(minW, minH), V(FLT_MAX, FLT_MAX));
+        }
     }
 
-    // ---- size / folding
-    const float foldedH = metrics::kTitleH + metrics::kPad * 2.0f;
-    if (st.folded && !g_ui.wasFolded) {
-        g_ui.unfoldedSize = ImGui::GetWindowSize();
-        g_ui.wasFolded = true;
-    }
-    if (!st.folded && g_ui.wasFolded) {
-        ImGui::SetNextWindowSize(g_ui.unfoldedSize.x > 1.0f ? g_ui.unfoldedSize : V(cfg.width, cfg.height), ImGuiCond_Always);
-        g_ui.wasFolded = false;
-    }
-    if (st.folded) ImGui::SetNextWindowSize(V(cfg.width, foldedH), ImGuiCond_Always);
-    else if (!st.unlocked) ImGui::SetNextWindowSize(V(cfg.width, cfg.height), ImGuiCond_Always);
-
-    if (!st.folded) {
-        const float minW = 900.0f, minH = 420.0f;
-        ImGui::SetNextWindowSizeConstraints(V(minW, minH), V(FLT_MAX, FLT_MAX));
-    }
+    // In the phone layout the window covers the whole canvas: nothing shows
+    // through it, so it is drawn opaque (a straight store instead of a blend).
+    if (cfg.compact) ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.031f, 0.067f, 0.039f, 1.0f));
 
     ImGui::Begin(cfg.windowTitle, nullptr, flags);
 
@@ -1063,21 +1214,23 @@ void DrawMenuInternal(Config& cfg, Fonts& fonts, Features& st)
 
     // ---- soft drop shadow, drawn behind everything
     ImDrawList* bg = ImGui::GetBackgroundDrawList();
-    if (!st.folded) {
-        for (int i = 16; i >= 1; --i) {
-            const float e = (float)i;
-            bg->AddRectFilled(V(wpos.x - e, wpos.y - e + 7.0f), V(wpos.x + wsize.x + e, wpos.y + wsize.y + e + 7.0f),
-                              IM_COL32(0, 0, 0, 4), metrics::kRadiusWin + e);
+    // Two layers instead of sixteen: a software rasterizer pays for every one
+    // of those full-window fills, and on a phone that is the whole frame budget.
+    if (!st.folded && !cfg.compact) {
+        const float layer[2] = { 14.0f, 7.0f };
+        const int   alpha[2] = { 7, 13 };
+        for (int i = 0; i < 2; ++i) {
+            bg->AddRectFilled(V(wpos.x - layer[i], wpos.y - layer[i] + 7.0f),
+                              V(wpos.x + wsize.x + layer[i], wpos.y + wsize.y + layer[i] + 7.0f),
+                              IM_COL32(0, 0, 0, alpha[i]), metrics::kRadiusWin + layer[i]);
         }
     }
 
     // ---- window body
     if (!st.folded) {
-        const float bodyTop = wpos.y + metrics::kTitleH + metrics::kPad;
-        const float bodyH = wsize.y - metrics::kTitleH - metrics::kFooterH - metrics::kPad;
-        const float sideX = wpos.x + metrics::kPad;
-        const float rightX = sideX + metrics::kSidebarW + metrics::kColumnGap;
-        const float rightW = wpos.x + wsize.x - metrics::kPad - rightX;
+        const float stripH  = TitleStripHeight(cfg);
+        const float bodyTop = wpos.y + stripH + metrics::kPad;
+        const float bodyH   = wsize.y - stripH - metrics::kFooterH - metrics::kPad;
 
         char uptime[64];
         const int secs = (int)(ImGui::GetTime() - g_ui.startedAt);
@@ -1086,10 +1239,24 @@ void DrawMenuInternal(Config& cfg, Fonts& fonts, Features& st)
         char nowStamp[32];
         FormatDateTime(nowStamp, (int)sizeof(nowStamp));
 
-        dl->PushClipRect(wpos, V(wpos.x + wsize.x, wpos.y + wsize.y - metrics::kFooterH), true);
-        DrawSidebar(dl, fonts, cfg, st, V(sideX, bodyTop), metrics::kSidebarW, bodyH);
-        DrawDashboard(dl, fonts, cfg, st, V(rightX, bodyTop), rightW, bodyH, uptime, g_ui.startedDate, nowStamp);
-        dl->PopClipRect();
+        if (cfg.compact) {
+            // ImGui::PushClipRect (not the draw list one) also clips the hit
+            // testing, so rows scrolled out of view cannot be clicked.
+            ImGui::PushClipRect(V(wpos.x, wpos.y + stripH),
+                                V(wpos.x + wsize.x, wpos.y + wsize.y - metrics::kFooterH), true);
+            DrawCompactBody(dl, fonts, cfg, st, V(wpos.x + metrics::kPad, bodyTop),
+                            wsize.x - metrics::kPad * 2.0f, bodyH, uptime, g_ui.startedDate, nowStamp);
+            ImGui::PopClipRect();
+        } else {
+            const float sideX  = wpos.x + metrics::kPad;
+            const float rightX = sideX + metrics::kSidebarW + metrics::kColumnGap;
+            const float rightW = wpos.x + wsize.x - metrics::kPad - rightX;
+
+            dl->PushClipRect(wpos, V(wpos.x + wsize.x, wpos.y + wsize.y - metrics::kFooterH), true);
+            DrawSidebar(dl, fonts, cfg, st, V(sideX, bodyTop), metrics::kSidebarW, bodyH);
+            DrawDashboard(dl, fonts, cfg, st, V(rightX, bodyTop), rightW, bodyH, uptime, g_ui.startedDate, nowStamp);
+            dl->PopClipRect();
+        }
     }
 
     DrawTitleStrip(dl, fonts, cfg, st, wpos, wsize.x, wpos.y + metrics::kTitleH);
@@ -1097,6 +1264,7 @@ void DrawMenuInternal(Config& cfg, Fonts& fonts, Features& st)
     if (!st.folded) DrawFooter(dl, fonts, cfg, wpos, wsize.x, wsize.y);
 
     ImGui::End();
+    if (cfg.compact) ImGui::PopStyleColor();
     (void)io;
 }
 
@@ -1131,35 +1299,39 @@ Fonts LoadFonts(const Config& cfg)
         0,
     };
 
+    // The atlas is rasterized at `pixelDensity` times the design size while the
+    // menu keeps drawing at the design size (see Menu.h). On a phone that means
+    // big *and* crisp text instead of an upscaled framebuffer; on the desktop
+    // density is 1 and nothing changes.
+    const float density = cfg.pixelDensity > 0.05f ? cfg.pixelDensity : 1.0f;
+
     ImFontConfig fc;
-    fc.OversampleH = 2;
-    fc.OversampleV = 2;
+    // Glyphs are already supersampled by `density`, so 1x oversampling is enough.
+    fc.OversampleH = density > 1.25f ? 1 : 2;
+    fc.OversampleV = density > 1.25f ? 1 : 2;
     fc.PixelSnapH = true;
 
     if (cfg.fontRegular) {
-        f.small = io.Fonts->AddFontFromFileTTF(cfg.fontRegular, f.smallSize, &fc, ranges);
-        f.body  = io.Fonts->AddFontFromFileTTF(cfg.fontRegular, f.bodySize, &fc, ranges);
+        f.small = io.Fonts->AddFontFromFileTTF(cfg.fontRegular, f.smallSize * density, &fc, ranges);
+        f.body  = io.Fonts->AddFontFromFileTTF(cfg.fontRegular, f.bodySize  * density, &fc, ranges);
         f.art   = f.body;
     }
     if (cfg.fontBold) {
         ImFontConfig fb = fc;
-        f.bold = io.Fonts->AddFontFromFileTTF(cfg.fontBold, f.boldSize, &fb, ranges);
-        f.title = io.Fonts->AddFontFromFileTTF(cfg.fontBold, f.titleSize, &fb, ranges);
+        f.bold  = io.Fonts->AddFontFromFileTTF(cfg.fontBold, f.boldSize  * density, &fb, ranges);
+        f.title = io.Fonts->AddFontFromFileTTF(cfg.fontBold, f.titleSize * density, &fb, ranges);
     }
     if (cfg.fontSmall) {
-        f.small = io.Fonts->AddFontFromFileTTF(cfg.fontSmall, f.smallSize, &fc, ranges);
+        f.small = io.Fonts->AddFontFromFileTTF(cfg.fontSmall, f.smallSize * density, &fc, ranges);
     }
 
-    if (!f.body)  f.body  = io.Fonts->AddFontDefault();
-    if (!f.bold)  f.bold  = f.body;
-    if (!f.small) f.small = f.body;
-    if (!f.title) f.title = f.bold;
-    if (!f.art)   f.art   = f.body;
-
-    f.smallSize = f.small->FontSize > 0.0f ? f.small->FontSize : f.smallSize;
-    f.bodySize  = f.body->FontSize > 0.0f ? f.body->FontSize : f.bodySize;
-    f.boldSize  = f.bold->FontSize > 0.0f ? f.bold->FontSize : f.boldSize;
-    f.titleSize = f.title->FontSize > 0.0f ? f.title->FontSize : f.titleSize;
+    // Fallbacks: the built-in ImGui font has a fixed size of its own, so when it
+    // is used the drawing size has to follow it.
+    if (!f.body)  { f.body  = io.Fonts->AddFontDefault(); f.bodySize  = f.body->FontSize; }
+    if (!f.bold)  { f.bold  = f.body;  f.boldSize  = f.bodySize; }
+    if (!f.small) { f.small = f.body;  f.smallSize = f.bodySize * 0.85f; }
+    if (!f.title) { f.title = f.bold;  f.titleSize = f.boldSize * 1.13f; }
+    if (!f.art)   f.art = f.body;
 
     return f;
 }
