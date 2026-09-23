@@ -1,0 +1,1709 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Cyber Terminal Overlay GUI - Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0c1014;
+      --bg-header: #141b24;
+      --tab-active: #1d2734;
+      --tab-hover: #18222e;
+      --border-color: #263445;
+      --border-glow: #57c7ff;
+      --color-lime: #5af78e;
+      --color-pink: #ff6e97;
+      --color-cyan: #57c7ff;
+      --color-yellow: #f1fa8c;
+      --color-orange: #ffb86c;
+      --color-red: #ff5555;
+      --color-blue: #6272a4;
+      --color-purple: #bd93f9;
+      --color-white: #f5f7fa;
+      --color-muted: #8395a7;
+      --track-dark: #19222c;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      background: #080a0d;
+      color: var(--color-white);
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Control Bar */
+    .top-toolbar {
+      height: 44px;
+      background: #10161f;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 13px;
+      z-index: 100;
+    }
+
+    .toolbar-left, .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .badge-root {
+      background: rgba(90, 247, 142, 0.15);
+      border: 1px solid var(--color-lime);
+      color: var(--color-lime);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-info {
+      color: var(--color-cyan);
+      font-size: 12px;
+    }
+
+    .btn-tool {
+      background: #1c2533;
+      border: 1px solid var(--border-color);
+      color: var(--color-white);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-tool:hover {
+      background: #253346;
+      border-color: var(--color-cyan);
+    }
+
+    .btn-tool.active {
+      background: rgba(87, 199, 255, 0.2);
+      border-color: var(--color-cyan);
+      color: var(--color-cyan);
+    }
+
+    /* Screen Simulator */
+    .viewport-area {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #050709;
+    }
+
+    /* Game Arena Mockup */
+    .game-arena {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 50% 50%, #16241b 0%, #0d1512 60%, #070c0a 100%);
+      overflow: hidden;
+      transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    /* Grid lines simulating MOBA terrain */
+    .arena-grid {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(46, 75, 58, 0.15) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(46, 75, 58, 0.15) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    /* River lane */
+    .arena-river {
+      position: absolute;
+      top: -20%;
+      right: 20%;
+      width: 180px;
+      height: 140%;
+      transform: rotate(35deg);
+      background: rgba(30, 65, 90, 0.25);
+      border-left: 2px dashed rgba(87, 199, 255, 0.2);
+      border-right: 2px dashed rgba(87, 199, 255, 0.2);
+    }
+
+    /* HUD elements on game */
+    .game-hud {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .game-hud-top {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10, 14, 18, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 4px 18px;
+      border-radius: 12px;
+      font-size: 13px;
+      color: #fff;
+      display: flex;
+      gap: 16px;
+    }
+
+    /* Hero entities */
+    .hero-entity {
+      position: absolute;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: bold;
+      pointer-events: none;
+      transition: all 0.05s linear;
+    }
+
+    .hero-player {
+      background: #2ecc71;
+      border: 2px solid #a8ffb2;
+      box-shadow: 0 0 16px rgba(46, 204, 113, 0.6);
+      color: #042410;
+    }
+
+    .hero-enemy {
+      background: #e74c3c;
+      border: 2px solid #ff7979;
+      box-shadow: 0 0 16px rgba(231, 76, 60, 0.6);
+      color: #fff;
+    }
+
+    /* ESP Rendering Elements */
+    .esp-overlay-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .esp-box-element {
+      position: absolute;
+      border: 2px solid var(--color-lime);
+      box-shadow: 0 0 8px rgba(90, 247, 142, 0.4);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .esp-tag {
+      position: absolute;
+      top: -22px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid var(--color-lime);
+      color: var(--color-lime);
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .esp-health-bar {
+      position: absolute;
+      left: -8px;
+      top: 0;
+      width: 4px;
+      height: 100%;
+      background: rgba(255, 0, 0, 0.5);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .esp-health-fill {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: #2ecc71;
+    }
+
+    .esp-snapline {
+      position: absolute;
+      pointer-events: none;
+      stroke: rgba(90, 247, 142, 0.65);
+      stroke-width: 1.5;
+      stroke-dasharray: 4 2;
+    }
+
+    .aim-fov-circle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      border: 1.5px dashed rgba(87, 199, 255, 0.55);
+      border-radius: 50%;
+      pointer-events: none;
+      box-shadow: inset 0 0 12px rgba(87, 199, 255, 0.1);
+    }
+
+    /* ============================================================
+       FLOATING OVERLAY WINDOW (Replica of Terminal.jpeg & ImGui)
+       ============================================================ */
+    .terminal-window {
+      position: absolute;
+      top: 60px;
+      left: 100px;
+      width: 860px;
+      height: 540px;
+      min-width: 520px;
+      min-height: 380px;
+      background: rgba(12, 16, 20, 0.94);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 20px rgba(87, 199, 255, 0.15);
+      display: flex;
+      flex-direction: column;
+      z-index: 50;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    /* Window Titlebar */
+    .win-titlebar {
+      height: 48px;
+      background: var(--bg-header);
+      border-top-left-radius: 12px;
+      border-top-right-radius: 12px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      cursor: grab;
+    }
+
+    .win-titlebar:active {
+      cursor: grabbing;
+    }
+
+    /* Tabs Bar inside Titlebar */
+    .tabs-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 100%;
+    }
+
+    .tab-item {
+      height: 32px;
+      padding: 0 14px;
+      background: #111720;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: var(--color-muted);
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.15s ease;
+    }
+
+    .tab-item:hover {
+      background: var(--tab-hover);
+      color: var(--color-white);
+    }
+
+    .tab-item.active {
+      background: var(--tab-active);
+      border-color: var(--border-color);
+      color: var(--color-lime);
+    }
+
+    .tab-item.active::after {
+      content: '';
+      position: absolute;
+      bottom: -8px;
+      left: 10px;
+      right: 10px;
+      height: 2px;
+      background: var(--color-lime);
+      box-shadow: 0 0 6px var(--color-lime);
+    }
+
+    .win-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .win-btn {
+      width: 32px;
+      height: 30px;
+      background: #1c2635;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--color-white);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s ease;
+    }
+
+    .win-btn:hover {
+      background: #29384d;
+      border-color: var(--color-cyan);
+    }
+
+    .win-btn.close:hover {
+      background: #c0392b;
+      border-color: #e74c3c;
+    }
+
+    /* Window Body */
+    .win-body {
+      flex: 1;
+      padding: 18px 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Tab Page 0: pwsh Terminal View (Matching Terminal.jpeg) */
+    .view-terminal {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .terminal-subhead {
+      color: var(--color-lime);
+      font-size: 13px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .terminal-columns {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 20px;
+      flex: 1;
+    }
+
+    /* ASCII Art in Pink */
+    .ascii-col {
+      color: var(--color-pink);
+      font-size: 10px;
+      line-height: 1.15;
+      white-space: pre;
+      font-family: monospace;
+      padding-top: 4px;
+      overflow: hidden;
+      text-shadow: 0 0 8px rgba(255, 110, 151, 0.25);
+    }
+
+    /* System Stats Column */
+    .info-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .greeting-line {
+      color: var(--color-lime);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* Cyber Boxes */
+    .cyber-box {
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 10px 14px;
+      position: relative;
+      margin-top: 6px;
+      background: rgba(16, 22, 30, 0.4);
+    }
+
+    .cyber-box-title {
+      position: absolute;
+      top: -8px;
+      left: 14px;
+      background: var(--bg-dark);
+      padding: 0 8px;
+      font-size: 11px;
+      color: var(--color-cyan);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .info-row {
+      display: flex;
+      align-items: center;
+      font-size: 11.5px;
+      line-height: 20px;
+    }
+
+    .info-label {
+      width: 72px;
+      color: var(--color-lime);
+      font-weight: 600;
+    }
+
+    .info-label.yellow {
+      color: var(--color-yellow);
+    }
+
+    .info-val {
+      color: var(--color-white);
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Progress bar */
+    .meter-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 170px;
+      margin-left: 10px;
+    }
+
+    .meter-bar {
+      flex: 1;
+      height: 10px;
+      background: var(--track-dark);
+      border: 1px solid var(--border-color);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .meter-fill {
+      height: 100%;
+      background: var(--color-lime);
+      box-shadow: 0 0 6px rgba(90, 247, 142, 0.5);
+    }
+
+    .meter-txt {
+      font-size: 10.5px;
+      color: var(--color-white);
+      width: 32px;
+      text-align: right;
+    }
+
+    .quote-line {
+      color: var(--color-orange);
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    .dots-palette {
+      display: flex;
+      gap: 8px;
+      margin: 4px 0;
+    }
+
+    .palette-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    /* Terminal Prompt */
+    .prompt-row {
+      margin-top: auto;
+      padding-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+    }
+
+    .prompt-label {
+      color: var(--color-lime);
+      font-weight: 600;
+    }
+
+    .prompt-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--color-white);
+      font-family: inherit;
+      font-size: 12.5px;
+    }
+
+    /* Other Tabs: Visuals, Aim, Misc, Settings */
+    .tab-page {
+      display: none;
+      height: 100%;
+      flex-direction: column;
+    }
+
+    .tab-page.active {
+      display: flex;
+    }
+
+    .grid-two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      flex: 1;
+    }
+
+    .card-pane {
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px 18px;
+      background: rgba(16, 22, 30, 0.4);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-cyan);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Cyber Toggle Control */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+
+    .toggle-label {
+      font-size: 12px;
+      color: var(--color-white);
+    }
+
+    .toggle-btn {
+      width: 58px;
+      height: 24px;
+      background: #1c2635;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--color-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .toggle-btn.on {
+      background: var(--color-lime);
+      border-color: var(--color-lime);
+      color: #0c1810;
+      box-shadow: 0 0 10px rgba(90, 247, 142, 0.4);
+    }
+
+    /* Sliders */
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--color-muted);
+    }
+
+    .slider-header span:last-child {
+      color: var(--color-lime);
+      font-weight: 600;
+    }
+
+    .cyber-range {
+      width: 100%;
+      accent-color: var(--color-lime);
+      cursor: pointer;
+    }
+
+    /* Radar Mini Canvas */
+    .radar-canvas-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      min-height: 180px;
+    }
+
+    .radar-circle {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: rgba(14, 20, 28, 0.9);
+      border: 2px solid var(--color-cyan);
+      position: relative;
+      box-shadow: 0 0 14px rgba(87, 199, 255, 0.2);
+    }
+
+    .radar-sweep {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: conic-gradient(from 0deg, rgba(87, 199, 255, 0.25) 0deg, transparent 60deg);
+      animation: radarRotate 3s linear infinite;
+    }
+
+    @keyframes radarRotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .radar-center-cross {
+      position: absolute;
+      inset: 0;
+      background: 
+        linear-gradient(to right, transparent 49.5%, var(--border-color) 49.5%, var(--border-color) 50.5%, transparent 50.5%),
+        linear-gradient(to bottom, transparent 49.5%, var(--border-color) 49.5%, var(--border-color) 50.5%, transparent 50.5%);
+    }
+
+    .radar-blip {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .radar-blip.self {
+      top: 50%;
+      left: 50%;
+      background: var(--color-lime);
+      box-shadow: 0 0 6px var(--color-lime);
+    }
+
+    .radar-blip.enemy1 {
+      top: 32%;
+      left: 68%;
+      background: var(--color-red);
+      box-shadow: 0 0 6px var(--color-red);
+    }
+
+    .radar-blip.enemy2 {
+      top: 70%;
+      left: 35%;
+      background: var(--color-red);
+      box-shadow: 0 0 6px var(--color-red);
+    }
+
+    /* Resize Handles */
+    .resize-handle {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      bottom: -6px;
+      z-index: 60;
+      cursor: nwse-resize;
+    }
+
+    .resize-handle.left {
+      left: -6px;
+      cursor: nesw-resize;
+    }
+
+    .resize-handle.right {
+      right: -6px;
+      cursor: nwse-resize;
+    }
+
+    .resize-triangle {
+      width: 14px;
+      height: 14px;
+      position: absolute;
+      bottom: 2px;
+    }
+
+    .resize-handle.left .resize-triangle {
+      left: 2px;
+      border-left: 3px solid var(--color-cyan);
+      border-bottom: 3px solid var(--color-cyan);
+    }
+
+    .resize-handle.right .resize-triangle {
+      right: 2px;
+      border-right: 3px solid var(--color-cyan);
+      border-bottom: 3px solid var(--color-cyan);
+    }
+
+    /* Floating Bubble (Collapsed mode) */
+    .floating-bubble {
+      position: absolute;
+      top: 120px;
+      left: 40px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: rgba(12, 16, 20, 0.95);
+      border: 2px solid var(--color-lime);
+      box-shadow: 0 0 20px rgba(90, 247, 142, 0.5), 0 8px 24px rgba(0, 0, 0, 0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-lime);
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 80;
+      backdrop-filter: blur(6px);
+      transition: transform 0.15s ease;
+    }
+
+    .floating-bubble:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 25px rgba(90, 247, 142, 0.8);
+    }
+
+    /* Event log console */
+    .event-log-box {
+      flex: 1;
+      background: #090d12;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 11px;
+      line-height: 18px;
+      overflow-y: auto;
+      font-family: monospace;
+    }
+
+    .log-success { color: var(--color-lime); }
+    .log-info { color: var(--color-cyan); }
+    .log-warn { color: var(--color-yellow); }
+    .log-err { color: var(--color-red); }
+
+    /* Quick command chips */
+    .command-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .chip-btn {
+      background: #141c26;
+      border: 1px solid var(--border-color);
+      color: var(--color-cyan);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      cursor: pointer;
+    }
+
+    .chip-btn:hover {
+      background: #202d3d;
+      border-color: var(--color-lime);
+      color: var(--color-lime);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Toolbar -->
+  <div class="top-toolbar">
+    <div class="toolbar-left">
+      <span class="badge-root">⚡ ROOT / UID 0</span>
+      <span class="badge-info">AArch64 Native Overlay • ImGui GLES3</span>
+      <span style="color: var(--color-muted); font-size: 11px;">Target: Mobile Legends (com.mobile.legends)</span>
+    </div>
+    <div class="toolbar-right">
+      <button class="btn-tool" onclick="toggleZoom()">📷 Drone Zoom: <span id="btnZoomTxt">2.0x</span></button>
+      <button class="btn-tool" onclick="resetOverlayPos()">⟲ Reset Window</button>
+      <button class="btn-tool active" onclick="toggleBubbleMode()">○ Bubble Mode</button>
+    </div>
+  </div>
+
+  <!-- Viewport Area -->
+  <div class="viewport-area" id="viewport">
+
+    <!-- Simulated Game Battlefield (Mobile Legends Arena) -->
+    <div class="game-arena" id="gameArena">
+      <div class="arena-grid"></div>
+      <div class="arena-river"></div>
+
+      <!-- Game HUD -->
+      <div class="game-hud">
+        <div class="game-hud-top">
+          <span style="color: #2ecc71;">BLUE: 12</span>
+          <span style="color: var(--color-yellow); font-weight: bold;">14:32</span>
+          <span style="color: #e74c3c;">RED: 9</span>
+        </div>
+      </div>
+
+      <!-- Player Hero (Center) -->
+      <div class="hero-entity hero-player" id="playerHero" style="top: 55%; left: 48%;">
+        YOU
+      </div>
+
+      <!-- Enemy Heroes -->
+      <div class="hero-entity hero-enemy" id="enemy1" style="top: 38%; left: 62%;">
+        Layla
+      </div>
+
+      <div class="hero-entity hero-enemy" id="enemy2" style="top: 68%; left: 34%;">
+        Chou
+      </div>
+    </div>
+
+    <!-- ESP Rendering Layer on top of Game -->
+    <div class="esp-overlay-layer" id="espLayer">
+      <!-- Aim FOV Circle -->
+      <div class="aim-fov-circle" id="aimFovCircle" style="width: 240px; height: 240px;"></div>
+
+      <!-- SVG Snaplines -->
+      <svg style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;">
+        <line id="snapline1" x1="48%" y1="55%" x2="62%" y2="38%" stroke="#5af78e" stroke-width="1.5" stroke-dasharray="4 2" />
+        <line id="snapline2" x1="48%" y1="55%" x2="34%" y2="68%" stroke="#5af78e" stroke-width="1.5" stroke-dasharray="4 2" />
+      </svg>
+
+      <!-- ESP Boxes -->
+      <div class="esp-box-element" id="espBox1" style="top: 38%; left: 62%; width: 56px; height: 72px;">
+        <div class="esp-tag">Layla [HP: 85%] 14m</div>
+        <div class="esp-health-bar"><div class="esp-health-fill" style="height: 85%;"></div></div>
+      </div>
+
+      <div class="esp-box-element" id="espBox2" style="top: 68%; left: 34%; width: 56px; height: 72px;">
+        <div class="esp-tag">Chou [HP: 60%] 26m</div>
+        <div class="esp-health-bar"><div class="esp-health-fill" style="height: 60%;"></div></div>
+      </div>
+    </div>
+
+    <!-- Floating Bubble Mode (when collapsed) -->
+    <div class="floating-bubble" id="floatingBubble" onclick="expandFromBubble()">
+      &gt;_
+    </div>
+
+    <!-- Floating Overlay Window (Replica of Terminal.jpeg & ImGui) -->
+    <div class="terminal-window" id="terminalWin">
+      
+      <!-- Titlebar -->
+      <div class="win-titlebar" id="winTitlebar">
+        <!-- Tabs -->
+        <div class="tabs-bar">
+          <div class="tab-item active" onclick="selectTab(0, this)">
+            <span>&gt;_</span> pwsh
+          </div>
+          <div class="tab-item" onclick="selectTab(1, this)">
+            <span>[#]</span> Visuals
+          </div>
+          <div class="tab-item" onclick="selectTab(2, this)">
+            <span>[*]</span> Combat
+          </div>
+          <div class="tab-item" onclick="selectTab(3, this)">
+            <span>[+]</span> Misc
+          </div>
+          <div class="tab-item" onclick="selectTab(4, this)">
+            <span>[~]</span> Settings
+          </div>
+        </div>
+
+        <!-- Window Controls -->
+        <div class="win-controls">
+          <button class="win-btn" title="Minimize to Bubble" onclick="minimizeToBubble()">○</button>
+          <button class="win-btn" title="Collapse Window" onclick="toggleCollapseWin()">▲</button>
+          <button class="win-btn close" title="Close" onclick="closeOverlay()">✕</button>
+        </div>
+      </div>
+
+      <!-- Window Body -->
+      <div class="win-body" id="winBody">
+
+        <!-- TAB 0: pwsh Terminal View (1:1 with Terminal.jpeg) -->
+        <div class="tab-page active" id="tab0">
+          <div class="view-terminal">
+            <div class="terminal-subhead">PowerShell 7.6.3</div>
+
+            <div class="terminal-columns">
+              <!-- Left Column: Pink ASCII Art -->
+              <div class="ascii-col">
+              .
+            -+-               :-
+    -      +###-             -===-
+  .###   +#####*.          +#####*:
+ *###- +####- -####*     -###*-=*#:
+ *******#--#-*.::**- ==- -=*#:
+ =###*: ... **.:*#**+ -..-*- +###*:
+:      -###+::: *+.:-..+###=.     :
+**:     **#+  =+         *#::.    =##*
+.###*+==: +#=.+.    -     =- =#+ .-+#####*
+ ####***+*+ ..=##+  ####=  : -**-***####*
+ =####+=- .. -####  ####*: *** -***###*
+  =########*.:###+ =######-:-***###*
+    =#######:.*** +########=.:=*****=
+      .+***=..:. +*********+:.
+        -**#::+#*: :+=+- .#+. =########-
+        =***###***- :  -***-  +*********=
+         *#########+ ***###* -***#####-
+          *###*#***  -*****-.##:
+           *#*******-   -*- +***=
+            *#########* - -#####+
+                        .+#*+
+                          :
+              </div>
+
+              <!-- Right Column: System info matching reference -->
+              <div class="info-col">
+                <div class="greeting-line">Hey, Vanil</div>
+
+                <!-- Hardware Box -->
+                <div class="cyber-box">
+                  <div class="cyber-box-title">Hardware</div>
+                  <div class="info-row">
+                    <span class="info-label">CPU</span>
+                    <span class="info-val">AMD Ryzen 5 5600X (6C / 12T) @ 4.65 GHz</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">GPU</span>
+                    <span class="info-val">NVIDIA GeForce RTX 3060 [Discrete] // 11.83 GiB</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">RAM</span>
+                    <span class="info-val">12.61 GiB / 15.89 GiB</span>
+                    <div class="meter-wrap">
+                      <div class="meter-bar"><div class="meter-fill" style="width: 79%;"></div></div>
+                      <span class="meter-txt">79%</span>
+                    </div>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">SWAP</span>
+                    <span class="info-val">338.86 MiB / 12.50 GiB</span>
+                    <div class="meter-wrap">
+                      <div class="meter-bar"><div class="meter-fill" style="width: 3%;"></div></div>
+                      <span class="meter-txt">3%</span>
+                    </div>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">DRIVE</span>
+                    <span class="info-val">C:\ 313.56 GiB / 464.79 GiB</span>
+                    <div class="meter-wrap">
+                      <div class="meter-bar"><div class="meter-fill" style="width: 67%;"></div></div>
+                      <span class="meter-txt">67%</span>
+                    </div>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">DRIVE</span>
+                    <span class="info-val">D:\ 541.77 GiB / 931.51 GiB</span>
+                    <div class="meter-wrap">
+                      <div class="meter-bar"><div class="meter-fill" style="width: 58%;"></div></div>
+                      <span class="meter-txt">58%</span>
+                    </div>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">DRIVE</span>
+                    <span class="info-val">E:\ 267.97 GiB / 443.23 GiB</span>
+                    <div class="meter-wrap">
+                      <div class="meter-bar"><div class="meter-fill" style="width: 60%;"></div></div>
+                      <span class="meter-txt">60%</span>
+                    </div>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">DRIVE</span>
+                    <span class="info-val">F:\ 148.94 GiB / 488.28 GiB</span>
+                    <div class="meter-wrap">
+                      <div class="meter-bar"><div class="meter-fill" style="width: 31%;"></div></div>
+                      <span class="meter-txt">31%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Session Box -->
+                <div class="cyber-box">
+                  <div class="cyber-box-title">Session</div>
+                  <div class="info-row">
+                    <span class="info-label">LOGIN</span>
+                    <span class="info-val">Vanil // 2026-07-16 14:11:16</span>
+                  </div>
+                </div>
+
+                <!-- Uptime / Date Box -->
+                <div class="cyber-box">
+                  <div class="cyber-box-title">Uptime / Date</div>
+                  <div class="info-row">
+                    <span class="info-label yellow">UPTIME</span>
+                    <span class="info-val">6 hours, 36 mins</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label yellow">DATE</span>
+                    <span class="info-val" id="currentDateVal">2026-07-16 20:42:32</span>
+                  </div>
+                </div>
+
+                <!-- Quote & Dots -->
+                <div class="quote-line">Bonsoir! Elliot.</div>
+                <div class="dots-palette">
+                  <div class="palette-dot" style="background: var(--color-white);"></div>
+                  <div class="palette-dot" style="background: var(--color-cyan);"></div>
+                  <div class="palette-dot" style="background: var(--color-purple);"></div>
+                  <div class="palette-dot" style="background: var(--color-blue);"></div>
+                  <div class="palette-dot" style="background: var(--color-yellow);"></div>
+                  <div class="palette-dot" style="background: var(--color-lime);"></div>
+                  <div class="palette-dot" style="background: var(--color-red);"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Terminal Prompt Row -->
+            <div class="prompt-row">
+              <span class="prompt-label">PS C:\Users\Vanil&gt;</span>
+              <input type="text" class="prompt-input" id="cmdInput" placeholder="Type command: help, status, esp on, aim on, clear..." onkeydown="handleCmd(event)" />
+            </div>
+            <div class="command-chips">
+              <button class="chip-btn" onclick="execQuickCmd('help')">help</button>
+              <button class="chip-btn" onclick="execQuickCmd('status')">status</button>
+              <button class="chip-btn" onclick="execQuickCmd('esp on')">esp on</button>
+              <button class="chip-btn" onclick="execQuickCmd('aim on')">aim on</button>
+              <button class="chip-btn" onclick="execQuickCmd('clear')">clear</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 1: Visuals / ESP Mockup -->
+        <div class="tab-page" id="tab1">
+          <div class="grid-two-col">
+            <!-- Left Card: Controls -->
+            <div class="card-pane">
+              <div class="card-title"><span>[#]</span> ESP Visuals (Mockup)</div>
+              
+              <div class="toggle-row">
+                <span class="toggle-label">Master ESP Engine</span>
+                <button class="toggle-btn on" id="toggleEspMaster" onclick="toggleSetting('espMaster', this)">ON</button>
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">2D Player Box</span>
+                <button class="toggle-btn on" id="toggleEspBox" onclick="toggleSetting('espBox', this)">ON</button>
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">Target Snaplines</span>
+                <button class="toggle-btn on" id="toggleEspLines" onclick="toggleSetting('espLines', this)">ON</button>
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">Health & Shield Bars</span>
+                <button class="toggle-btn on" id="toggleEspHp" onclick="toggleSetting('espHp', this)">ON</button>
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">Hero Name & Distance</span>
+                <button class="toggle-btn on" id="toggleEspName" onclick="toggleSetting('espName', this)">ON</button>
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">360° Radar Alert</span>
+                <button class="toggle-btn on" id="toggleEspRadar" onclick="toggleSetting('espRadar', this)">ON</button>
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span>Render Distance</span>
+                  <span id="distVal">250m</span>
+                </div>
+                <input type="range" class="cyber-range" min="50" max="500" value="250" oninput="document.getElementById('distVal').innerText = this.value + 'm'">
+              </div>
+            </div>
+
+            <!-- Right Card: Radar Simulation -->
+            <div class="card-pane">
+              <div class="card-title"><span>◉</span> Real-Time Radar Scanner</div>
+              <div class="radar-canvas-wrap">
+                <div class="radar-circle">
+                  <div class="radar-sweep"></div>
+                  <div class="radar-center-cross"></div>
+                  <div class="radar-blip self"></div>
+                  <div class="radar-blip enemy1" id="radarBlip1"></div>
+                  <div class="radar-blip enemy2" id="radarBlip2"></div>
+                </div>
+              </div>
+              <div style="font-size: 11px; color: var(--color-muted); text-align: center;">
+                Enemies detected in 360° proximity: <span style="color: var(--color-red); font-weight: bold;">2</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: Combat / Aim Assist Mockup -->
+        <div class="tab-page" id="tab2">
+          <div class="grid-two-col">
+            <div class="card-pane">
+              <div class="card-title"><span>[*]</span> Aimbot / Combat (Mockup)</div>
+              <div class="toggle-row">
+                <span class="toggle-label">Master Aim Assist</span>
+                <button class="toggle-btn" id="toggleAimMaster" onclick="toggleSetting('aimMaster', this)">OFF</button>
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">Draw FOV Radius</span>
+                <button class="toggle-btn on" id="toggleAimFov" onclick="toggleSetting('aimFov', this)">ON</button>
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">Target Prediction</span>
+                <button class="toggle-btn on" onclick="toggleSetting('aimPredict', this)">ON</button>
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">Visible Check Only</span>
+                <button class="toggle-btn on" onclick="toggleSetting('aimVisible', this)">ON</button>
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span>FOV Angle</span>
+                  <span id="fovAngleVal">90°</span>
+                </div>
+                <input type="range" class="cyber-range" min="20" max="180" value="90" oninput="updateFov(this.value)">
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span>Aim Smoothness</span>
+                  <span id="smoothVal">6.5</span>
+                </div>
+                <input type="range" class="cyber-range" min="1" max="25" step="0.5" value="6.5" oninput="document.getElementById('smoothVal').innerText = this.value">
+              </div>
+            </div>
+
+            <div class="card-pane">
+              <div class="card-title"><span>🎯</span> Priority & Hitbox Selection</div>
+              <div style="font-size: 12px; display: flex; flex-direction: column; gap: 8px;">
+                <label style="display: flex; gap: 8px; align-items: center; cursor: pointer;">
+                  <input type="radio" name="priority" checked /> Lowest HP % (Finisher)
+                </label>
+                <label style="display: flex; gap: 8px; align-items: center; cursor: pointer;">
+                  <input type="radio" name="priority" /> Nearest Distance
+                </label>
+                <label style="display: flex; gap: 8px; align-items: center; cursor: pointer;">
+                  <input type="radio" name="priority" /> Closest to Crosshair
+                </label>
+              </div>
+              <hr style="border: none; border-top: 1px solid var(--border-color);" />
+              <div style="font-size: 11.5px; color: var(--color-cyan); line-height: 20px;">
+                <div>• Dispatch: Non-exclusive kernel /dev/input</div>
+                <div>• Touch Bypass: Passive injection mode</div>
+                <div>• Detection Risk: 0.00% (Clean Mockup)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: Misc / Game Mods Mockup -->
+        <div class="tab-page" id="tab3">
+          <div class="grid-two-col">
+            <div class="card-pane">
+              <div class="card-title"><span>[+]</span> Game Tweaks (Mockup)</div>
+              
+              <div class="toggle-row">
+                <span class="toggle-label">Drone View Camera</span>
+                <button class="toggle-btn on" id="toggleDrone" onclick="toggleSetting('droneView', this)">ON</button>
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span>Camera Elevation</span>
+                  <span id="droneZoomVal">2.0x</span>
+                </div>
+                <input type="range" class="cyber-range" min="1" max="4" step="0.2" value="2" oninput="updateDroneZoom(this.value)">
+              </div>
+
+              <div class="toggle-row">
+                <span class="toggle-label">Unlock 120 Ultra FPS</span>
+                <button class="toggle-btn on" onclick="toggleSetting('fps120', this)">ON</button>
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">Show Skill Cooldowns</span>
+                <button class="toggle-btn on" onclick="toggleSetting('cooldowns', this)">ON</button>
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">Streamer Mode (OBS Hidden)</span>
+                <button class="toggle-btn on" onclick="toggleSetting('streamer', this)">ON</button>
+              </div>
+            </div>
+
+            <!-- Event Log -->
+            <div class="card-pane">
+              <div class="card-title"><span>⌨</span> Console Event History</div>
+              <div class="event-log-box" id="eventLog">
+                <div class="log-info">[*] Android Root Native Overlay loaded.</div>
+                <div class="log-success">[+] SurfaceComposer hooked via libgui.so.</div>
+                <div class="log-success">[+] Evdev non-exclusive touch dispatcher online.</div>
+                <div class="log-info">[*] Target: Mobile Legends Bang Bang (com.mobile.legends)</div>
+                <div class="log-success">[✓] UID: 0 (Root Privileges Confirmed).</div>
+                <div class="log-success">[✓] GUI ready. Running at 60.0 FPS.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: Overlay Preferences -->
+        <div class="tab-page" id="tab4">
+          <div class="grid-two-col">
+            <div class="card-pane">
+              <div class="card-title"><span>[~]</span> Window & Display Preferences</div>
+              
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span>Window Opacity</span>
+                  <span id="alphaVal">94%</span>
+                </div>
+                <input type="range" class="cyber-range" min="40" max="100" value="94" oninput="updateOpacity(this.value)">
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span>Interface Scale</span>
+                  <span id="scaleVal">1.0x</span>
+                </div>
+                <input type="range" class="cyber-range" min="60" max="140" value="100" oninput="updateScale(this.value)">
+              </div>
+
+              <button class="btn-tool" style="width: 100%; height: 38px; margin-top: 10px;" onclick="minimizeToBubble()">
+                Minimize to Floating Bubble Mode
+              </button>
+
+              <button class="btn-tool" style="width: 100%; height: 38px;" onclick="resetOverlayPos()">
+                Center Window on Screen
+              </button>
+            </div>
+
+            <div class="card-pane">
+              <div class="card-title"><span>📱</span> Android Root Environment</div>
+              <div style="font-size: 11.5px; line-height: 22px; color: var(--color-white);">
+                <div>Display Resolution: <span style="color: var(--color-lime);">2400 × 1080 (Landscape)</span></div>
+                <div>Graphics API: <span style="color: var(--color-lime);">OpenGL ES 3.0 / EGL</span></div>
+                <div>Surface API: <span style="color: var(--color-lime);">SurfaceComposerClient (dlsym)</span></div>
+                <div>Input Driver: <span style="color: var(--color-lime);">Linux /dev/input/event* (evdev)</span></div>
+                <div>Packaging: <span style="color: var(--color-lime);">Self-extracting .sh binary</span></div>
+                <div>Touch Passthrough: <span style="color: var(--color-lime);">Non-exclusive observer</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- External Resize Handles -->
+      <div class="resize-handle left" id="resizeHandleL"><div class="resize-triangle"></div></div>
+      <div class="resize-handle right" id="resizeHandleR"><div class="resize-triangle"></div></div>
+    </div>
+
+  </div>
+
+  <script>
+    // State
+    let currentTab = 0;
+    let isCollapsed = false;
+    let isBubble = false;
+    let droneZoom = 2.0;
+
+    // Elements
+    const terminalWin = document.getElementById('terminalWin');
+    const winTitlebar = document.getElementById('winTitlebar');
+    const winBody = document.getElementById('winBody');
+    const floatingBubble = document.getElementById('floatingBubble');
+    const gameArena = document.getElementById('gameArena');
+    const espLayer = document.getElementById('espLayer');
+    const eventLog = document.getElementById('eventLog');
+    const aimFovCircle = document.getElementById('aimFovCircle');
+
+    // Clock update
+    function updateClock() {
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      const elem = document.getElementById('currentDateVal');
+      if (elem) elem.innerText = timeStr;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Tab Navigation
+    function selectTab(index, elem) {
+      currentTab = index;
+      document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+      elem.classList.add('active');
+
+      document.querySelectorAll('.tab-page').forEach((p, idx) => {
+        p.classList.toggle('active', idx === index);
+      });
+    }
+
+    // Toggle Settings
+    function toggleSetting(key, btn) {
+      btn.classList.toggle('on');
+      const isOn = btn.classList.contains('on');
+      btn.innerText = isOn ? 'ON' : 'OFF';
+
+      if (key === 'espMaster' || key === 'espBox' || key === 'espLines') {
+        const showEsp = document.getElementById('toggleEspMaster').classList.contains('on');
+        const showBox = document.getElementById('toggleEspBox').classList.contains('on');
+        const showLines = document.getElementById('toggleEspLines').classList.contains('on');
+        
+        document.querySelectorAll('.esp-box-element').forEach(b => {
+          b.style.display = (showEsp && showBox) ? 'block' : 'none';
+        });
+        document.querySelectorAll('line').forEach(l => {
+          l.style.display = (showEsp && showLines) ? 'block' : 'none';
+        });
+        logEvent(`[${isOn ? '+' : '-'}] ESP ${key} switched ${isOn ? 'ON' : 'OFF'}.`);
+      } else if (key === 'aimMaster' || key === 'aimFov') {
+        const showFov = document.getElementById('toggleAimFov').classList.contains('on');
+        aimFovCircle.style.display = showFov ? 'block' : 'none';
+        logEvent(`[${isOn ? '+' : '-'}] Combat ${key} switched ${isOn ? 'ON' : 'OFF'}.`);
+      } else {
+        logEvent(`[${isOn ? '+' : '-'}] Feature ${key} switched ${isOn ? 'ON' : 'OFF'}.`);
+      }
+    }
+
+    // Update FOV Circle
+    function updateFov(deg) {
+      document.getElementById('fovAngleVal').innerText = deg + '°';
+      const px = Math.round(deg * 2.6);
+      aimFovCircle.style.width = px + 'px';
+      aimFovCircle.style.height = px + 'px';
+    }
+
+    // Drone Zoom
+    function updateDroneZoom(val) {
+      droneZoom = parseFloat(val);
+      document.getElementById('droneZoomVal').innerText = droneZoom.toFixed(1) + 'x';
+      document.getElementById('btnZoomTxt').innerText = droneZoom.toFixed(1) + 'x';
+      const scale = 1.0 / (droneZoom * 0.5);
+      gameArena.style.transform = `scale(${scale})`;
+    }
+
+    function toggleZoom() {
+      let nextZoom = droneZoom >= 3.5 ? 1.0 : droneZoom + 0.8;
+      updateDroneZoom(nextZoom);
+    }
+
+    // Window Opacity
+    function updateOpacity(val) {
+      document.getElementById('alphaVal').innerText = val + '%';
+      terminalWin.style.background = `rgba(12, 16, 20, ${val / 100})`;
+    }
+
+    // Window Scale
+    function updateScale(val) {
+      document.getElementById('scaleVal').innerText = (val / 100).toFixed(1) + 'x';
+      terminalWin.style.transform = `scale(${val / 100})`;
+      terminalWin.style.transformOrigin = 'top left';
+    }
+
+    // Collapse / Fold Window
+    function toggleCollapseWin() {
+      isCollapsed = !isCollapsed;
+      winBody.style.display = isCollapsed ? 'none' : 'flex';
+      terminalWin.style.height = isCollapsed ? '48px' : '540px';
+    }
+
+    // Bubble Mode
+    function minimizeToBubble() {
+      terminalWin.style.display = 'none';
+      floatingBubble.style.display = 'flex';
+      isBubble = true;
+      logEvent("[*] Window minimized to floating bubble overlay.");
+    }
+
+    function expandFromBubble() {
+      floatingBubble.style.display = 'none';
+      terminalWin.style.display = 'flex';
+      isBubble = false;
+      logEvent("[*] Restored overlay window from floating bubble.");
+    }
+
+    function toggleBubbleMode() {
+      if (isBubble) expandFromBubble();
+      else minimizeToBubble();
+    }
+
+    function closeOverlay() {
+      terminalWin.style.display = 'none';
+      floatingBubble.style.display = 'flex';
+      logEvent("[-] Overlay hidden. Tap the bubble to reopen.");
+    }
+
+    function resetOverlayPos() {
+      terminalWin.style.top = '60px';
+      terminalWin.style.left = '100px';
+      terminalWin.style.width = '860px';
+      terminalWin.style.height = '540px';
+      terminalWin.style.display = 'flex';
+      winBody.style.display = 'flex';
+      floatingBubble.style.display = 'none';
+      isCollapsed = false;
+      isBubble = false;
+      logEvent("[+] Reset overlay window to screen center.");
+    }
+
+    function logEvent(msg) {
+      if (!eventLog) return;
+      const line = document.createElement('div');
+      if (msg.startsWith('[✓]') || msg.startsWith('[+]')) line.className = 'log-success';
+      else if (msg.startsWith('[-]')) line.className = 'log-err';
+      else line.className = 'log-info';
+      line.innerText = msg;
+      eventLog.appendChild(line);
+      eventLog.scrollTop = eventLog.scrollHeight;
+    }
+
+    // Command Line Handling
+    function handleCmd(e) {
+      if (e.key === 'Enter') {
+        const input = document.getElementById('cmdInput');
+        const cmd = input.value.trim();
+        if (cmd) {
+          execQuickCmd(cmd);
+          input.value = '';
+        }
+      }
+    }
+
+    function execQuickCmd(cmd) {
+      logEvent(`> ${cmd}`);
+      const lower = cmd.toLowerCase();
+      if (lower === 'help') {
+        logEvent("[*] Available commands:");
+        logEvent("    • help       : List commands");
+        logEvent("    • status     : Show injection & root status");
+        logEvent("    • esp on/off : Toggle master ESP visuals");
+        logEvent("    • aim on/off : Toggle combat aimbot");
+        logEvent("    • clear      : Clear console buffer");
+      } else if (lower === 'status') {
+        logEvent("[✓] Process: com.mobile.legends (PID 14820)");
+        logEvent("[✓] Root: UID 0 (Granted) | Hook: Safe /dev/input");
+        logEvent("[✓] Display: 2400x1080 @ 60fps");
+      } else if (lower === 'esp on') {
+        document.getElementById('toggleEspMaster').classList.add('on');
+        document.getElementById('toggleEspMaster').innerText = 'ON';
+        toggleSetting('espMaster', document.getElementById('toggleEspMaster'));
+      } else if (lower === 'esp off') {
+        document.getElementById('toggleEspMaster').classList.remove('on');
+        document.getElementById('toggleEspMaster').innerText = 'OFF';
+        toggleSetting('espMaster', document.getElementById('toggleEspMaster'));
+      } else if (lower === 'aim on') {
+        document.getElementById('toggleAimMaster').classList.add('on');
+        document.getElementById('toggleAimMaster').innerText = 'ON';
+        toggleSetting('aimMaster', document.getElementById('toggleAimMaster'));
+      } else if (lower === 'aim off') {
+        document.getElementById('toggleAimMaster').classList.remove('on');
+        document.getElementById('toggleAimMaster').innerText = 'OFF';
+        toggleSetting('aimMaster', document.getElementById('toggleAimMaster'));
+      } else if (lower === 'clear') {
+        eventLog.innerHTML = '<div class="log-info">[*] Console cleared.</div>';
+      } else {
+        logEvent(`[*] Command executed: ${cmd}`);
+      }
+    }
+
+    // Window Dragging Implementation
+    let isDragging = false;
+    let dragStartX = 0, dragStartY = 0;
+    let winStartX = 0, winStartY = 0;
+
+    winTitlebar.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.win-btn') || e.target.closest('.tab-item')) return;
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      const rect = terminalWin.getBoundingClientRect();
+      winStartX = rect.left;
+      winStartY = rect.top;
+      e.preventDefault();
+    });
+
+    // Window Resizing Implementation
+    let isResizing = false;
+    let resizeDir = 'right';
+    let resizeStartX = 0, resizeStartY = 0;
+    let winStartW = 0, winStartH = 0;
+
+    document.getElementById('resizeHandleR').addEventListener('mousedown', (e) => {
+      isResizing = true;
+      resizeDir = 'right';
+      resizeStartX = e.clientX;
+      resizeStartY = e.clientY;
+      winStartW = terminalWin.offsetWidth;
+      winStartH = terminalWin.offsetHeight;
+      e.stopPropagation();
+      e.preventDefault();
+    });
+
+    document.getElementById('resizeHandleL').addEventListener('mousedown', (e) => {
+      isResizing = true;
+      resizeDir = 'left';
+      resizeStartX = e.clientX;
+      resizeStartY = e.clientY;
+      winStartW = terminalWin.offsetWidth;
+      winStartH = terminalWin.offsetHeight;
+      winStartX = terminalWin.offsetLeft;
+      e.stopPropagation();
+      e.preventDefault();
+    });
+
+    // Bubble Dragging
+    let isDraggingBubble = false;
+    let bubbleStartX = 0, bubbleStartY = 0;
+    let bElemStartX = 0, bElemStartY = 0;
+
+    floatingBubble.addEventListener('mousedown', (e) => {
+      isDraggingBubble = true;
+      bubbleStartX = e.clientX;
+      bubbleStartY = e.clientY;
+      bElemStartX = floatingBubble.offsetLeft;
+      bElemStartY = floatingBubble.offsetTop;
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (isDragging) {
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        terminalWin.style.left = `${winStartX + dx}px`;
+        terminalWin.style.top = `${winStartY + dy}px`;
+      }
+      if (isResizing) {
+        const dx = e.clientX - resizeStartX;
+        const dy = e.clientY - resizeStartY;
+        if (resizeDir === 'right') {
+          terminalWin.style.width = `${Math.max(520, winStartW + dx)}px`;
+          terminalWin.style.height = `${Math.max(380, winStartH + dy)}px`;
+        } else {
+          const newW = Math.max(520, winStartW - dx);
+          terminalWin.style.width = `${newW}px`;
+          terminalWin.style.left = `${winStartX + (winStartW - newW)}px`;
+          terminalWin.style.height = `${Math.max(380, winStartH + dy)}px`;
+        }
+      }
+      if (isDraggingBubble) {
+        const dx = e.clientX - bubbleStartX;
+        const dy = e.clientY - bubbleStartY;
+        floatingBubble.style.left = `${bElemStartX + dx}px`;
+        floatingBubble.style.top = `${bElemStartY + dy}px`;
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      isDragging = false;
+      isResizing = false;
+      isDraggingBubble = false;
+    });
+
+    // Touch Support for Mobile
+    winTitlebar.addEventListener('touchstart', (e) => {
+      if (e.target.closest('.win-btn') || e.target.closest('.tab-item')) return;
+      const touch = e.touches[0];
+      isDragging = true;
+      dragStartX = touch.clientX;
+      dragStartY = touch.clientY;
+      const rect = terminalWin.getBoundingClientRect();
+      winStartX = rect.left;
+      winStartY = rect.top;
+    });
+
+    window.addEventListener('touchmove', (e) => {
+      if (isDragging && e.touches.length > 0) {
+        const touch = e.touches[0];
+        const dx = touch.clientX - dragStartX;
+        const dy = touch.clientY - dragStartY;
+        terminalWin.style.left = `${winStartX + dx}px`;
+        terminalWin.style.top = `${winStartY + dy}px`;
+      }
+    });
+
+    window.addEventListener('touchend', () => {
+      isDragging = false;
+    });
+
+    // Simulated hero wandering movement
+    let angle = 0;
+    setInterval(() => {
+      angle += 0.03;
+      const e1 = document.getElementById('enemy1');
+      const e2 = document.getElementById('enemy2');
+      const box1 = document.getElementById('espBox1');
+      const box2 = document.getElementById('espBox2');
+      const line1 = document.getElementById('snapline1');
+      const line2 = document.getElementById('snapline2');
+      const blip1 = document.getElementById('radarBlip1');
+      const blip2 = document.getElementById('radarBlip2');
+
+      const x1 = 62 + Math.sin(angle) * 4;
+      const y1 = 38 + Math.cos(angle * 1.3) * 3;
+      const x2 = 34 + Math.cos(angle * 0.8) * 5;
+      const y2 = 68 + Math.sin(angle) * 3;
+
+      if (e1 && box1) {
+        e1.style.left = x1 + '%';
+        e1.style.top = y1 + '%';
+        box1.style.left = x1 + '%';
+        box1.style.top = y1 + '%';
+        if (line1) {
+          line1.setAttribute('x2', x1 + '%');
+          line1.setAttribute('y2', y1 + '%');
+        }
+      }
+
+      if (e2 && box2) {
+        e2.style.left = x2 + '%';
+        e2.style.top = y2 + '%';
+        box2.style.left = x2 + '%';
+        box2.style.top = y2 + '%';
+        if (line2) {
+          line2.setAttribute('x2', x2 + '%');
+          line2.setAttribute('y2', y2 + '%');
+        }
+      }
+
+      if (blip1) {
+        blip1.style.left = (50 + (x1 - 48) * 1.5) + '%';
+        blip1.style.top = (50 + (y1 - 55) * 1.5) + '%';
+      }
+      if (blip2) {
+        blip2.style.left = (50 + (x2 - 48) * 1.5) + '%';
+        blip2.style.top = (50 + (y2 - 55) * 1.5) + '%';
+      }
+    }, 40);
+  </script>
+</body>
+</html>
