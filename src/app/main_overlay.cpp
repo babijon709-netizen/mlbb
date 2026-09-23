@@ -62,6 +62,8 @@ struct Options {
     bool        folded = false;
     bool        debugTouch = false;
     bool        grab = false;
+    bool        probe = false;                  // --probe: check surface/touch, then quit
+    int         timeoutSec = 0;                 // --timeout N: close itself after N seconds
     bool        exitChord = true;
     bool        verbose = true;
     mlbb::overlay::TouchMap touch;
@@ -118,6 +120,8 @@ void PrintUsage()
         "  --touch-rot 0|90|180|270\n"
         "  --debug-touch     draw a crosshair where the touch lands\n"
         "  --grab            take the touch device away from the game (see README)\n"
+        "  --probe           create the layer, check touch, report and exit (first run)\n"
+        "  --timeout N       close by itself after N seconds (safety net)\n"
         "  --no-exit-chord   do not quit on volume-up + volume-down\n"
         "  --quiet           less chatter on stdout\n");
 }
@@ -251,6 +255,8 @@ int main(int argc, char** argv)
     if (HasFlag(argc, argv, "--debug-touch")) opt.debugTouch = true;
     if (HasFlag(argc, argv, "--grab"))        opt.grab = true;
     if (HasFlag(argc, argv, "--no-exit-chord")) opt.exitChord = false;
+    if (HasFlag(argc, argv, "--probe"))         opt.probe = true;
+    if (const char* v = ArgValue(argc, argv, "--timeout")) opt.timeoutSec = std::atoi(v);
     if (HasFlag(argc, argv, "--quiet"))        opt.verbose = false;
 
     if (HasFlag(argc, argv, "--touch-swap"))    { opt.touch.swapXY = true;  opt.touchSwapSet = true; }
@@ -270,7 +276,8 @@ int main(int argc, char** argv)
     std::signal(SIGHUP, OnSignal);
 
     // ------------------------------------------------------------ surface ----
-    const bool offline = (opt.shot != nullptr);
+    // --probe is about the real surface, so it wins over --shot.
+    const bool offline = (opt.shot != nullptr) && !opt.probe;
 
     int surfaceW = opt.surfaceW;
     int surfaceH = opt.surfaceH;
@@ -431,6 +438,18 @@ int main(int argc, char** argv)
         if (!offline) touch.PrintDevices();
     }
 
+    if (opt.probe) {
+        std::printf("overlay: probe ok - the layer, the CPU buffer and %s are all usable.\n",
+                    touchReady ? "the touch screen" : "the buttons (no touch screen found)");
+        std::printf("overlay: nothing was left on screen; start it for real without --probe\n");
+        touch.Close();
+        sink.Close();
+        ImGui::DestroyContext();
+        android::ANativeWindowCreator::Destroy(static_cast<ANativeWindow*>(window));
+        android::ANativeWindowCreator::Cleanup();
+        return touchReady ? 0 : 2;
+    }
+
     // ----------------------------------------------------------------- loop ----
     // A tap can produce down+up inside a single poll, and ImGui only sees
     // mouse buttons as transitions between frames - so every change of the
@@ -466,6 +485,11 @@ int main(int argc, char** argv)
         const double elapsed = std::chrono::duration<double>(tick - lastTick).count();
         lastTick = tick;
         nowSec += elapsed < 1.0 ? elapsed : 0.0;
+
+        if (opt.timeoutSec > 0 && nowSec >= (double)opt.timeoutSec) {
+            std::printf("overlay: %d seconds are up - closing\n", opt.timeoutSec);
+            break;
+        }
 
         if (touch.ExitChord() && opt.exitChord) {
             std::printf("overlay: volume-up + volume-down - closing\n");
