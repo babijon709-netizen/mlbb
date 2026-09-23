@@ -1,0 +1,78 @@
+name: Build Android Overlay (.sh)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'arena/**'
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-arm64:
+    name: Build Android AArch64 Overlay
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+          link-to-sdk: true
+
+      - name: Install Ninja build system
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Compile Cyber Overlay (ARM64-v8a)
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-28 \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target cyber_overlay -j$(nproc)
+
+      - name: Package self-extracting .sh executable
+        run: |
+          mkdir -p dist
+          chmod +x tools/package.sh run_ui.sh
+          ./tools/package.sh build/cyber_overlay dist/cyber_overlay.sh
+          ls -lh dist/
+
+      - name: Verify self-extracting payload
+        run: |
+          PAYLOAD_LINE=$(awk '/^__PAYLOAD_BELOW__$/ {print NR+1; exit}' dist/cyber_overlay.sh)
+          tail -n +"$PAYLOAD_LINE" dist/cyber_overlay.sh | gzip -dc > dist/verified_bin
+          cmp build/cyber_overlay dist/verified_bin
+          rm -f dist/verified_bin
+          echo "[✓] Integrity verification passed: embedded payload unpacks 1:1."
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyber-overlay-android-root
+          path: |
+            dist/cyber_overlay.sh
+            dist/cyber_overlay.sh.sha256
+            build/cyber_overlay
+
+      - name: Publish GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/cyber_overlay.sh
+            dist/cyber_overlay.sh.sha256
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
