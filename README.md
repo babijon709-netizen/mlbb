@@ -24,11 +24,6 @@ fastfetch: полупрозрачное окно, розовый блочный 
 
 ## Запуск на телефоне (Android + Termux)
 
-1. Поставить **Termux** (F-Droid) и приложение **Termux:X11** (APK с
-   [github.com/termux/termux-x11/releases](https://github.com/termux/termux-x11/releases)) —
-   это X-сервер, в его окне и живёт меню.
-2. В Termux:
-
 ```bash
 pkg install git
 git clone https://github.com/babijon709-netizen/mlbb
@@ -36,23 +31,40 @@ cd mlbb
 ./run.sh
 ```
 
-`run.sh` сам: поставит `clang make pkg-config sdl2`, подтянет ImGui
-(`git submodule update --init --recursive`), соберёт `build/spectre`, поднимет
-Termux:X11 и запустит меню на весь экран. Тап — клик, свайп — прокрутка.
+Одна команда — и меню можно кликать. `run.sh` сам решает, каким способом:
+
+* есть **root** — предложит оверлей (X11 и SDL не нужны вообще);
+* есть **Termux:X11** (или уже запущенный `DISPLAY`) — откроет окно на весь экран;
+* нет ничего — скажет, что поставить, и предложит `--shot`.
+
+Что найдено в системе и что будет запущено:
+
+```bash
+./run.sh --check
+```
+
+```
+окружение
+  Termux .......... ✓      clang ... ✓   make ... ✓
+  SDL2 ............ ✓      Termux:X11 ✓   DISPLAY ✗
+  root (su) ....... ✓      ImGui ... ✓   шрифты ✓
+```
+
+Для окна нужен X-сервер — приложение **Termux:X11**
+(APK с [github.com/termux/termux-x11/releases](https://github.com/termux/termux-x11/releases))
+и пакет `pkg install x11-repo && pkg install termux-x11-nightly`; `run.sh`
+поднимет его сам. Полностью без X11 работает оверлей: `./run.sh --overlay`.
 
 ```bash
 ./run.sh --tab 2 --populate      # сразу на вкладке VISUAL, часть тумблеров включена
 ./run.sh --windowed 900x600      # окном, не на весь экран
-./run.sh --ui-scale 0.75         # крупнее интерфейс  (см. «Производительность»)
-./run.sh --shot menu.ppm         # просто отрендерить кадр в картинку, окно не нужно
+./run.sh --ui-scale 0.75         # мельче интерфейс и вдвое легче кадр
+./run.sh --shot menu.ppm         # просто отрендерить кадр в картинку: ни окна, ни root
 ./run.sh --help                  # все флаги приложения
 ```
 
-Без X11 (например, если Termux:X11 ставить не хотите) можно получить картинку:
-
-```bash
-./run.sh --shot menu.ppm && convert menu.ppm menu.png
-```
+В окне: тап — клик, свайп — прокрутка, `Esc` — выход. Если после запуска меню
+сразу закрылось, `run.sh` подскажет, что не так (и предложит оверлей, если есть root).
 
 ## Оверлей поверх других приложений (root)
 
@@ -62,7 +74,10 @@ Termux:X11 и запустит меню на весь экран. Тап — к�
 ```bash
 ./run.sh --overlay                     # собрать и повесить поверх всего
 ./run.sh --overlay --populate --tab 2  # сразу с включёнными тумблерами
+./run.sh --check                       # посмотреть, что вообще есть в системе
 ```
+
+Если Termux:X11 не установлен, `./run.sh` без флагов сам выберет оверлей.
 
 Никакого APK, JNI и Android Studio — это один ELF:
 
