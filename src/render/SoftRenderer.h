@@ -38,6 +38,16 @@ public:
     // Returns false if the file could not be read.
     bool LoadBackgroundPPM(const char* path);
 
+    // Output alpha. Off (default): the framebuffer is opaque, which is what a
+    // window blit wants. On: the framebuffer holds *premultiplied* RGBA, the
+    // layout an Android RGBA_8888 SurfaceFlinger layer expects - pixels nobody
+    // drew stay fully transparent, so the game shows through them. Blending in
+    // premultiplied space is the same source-over as the opaque path, the only
+    // difference is that the alpha channel is composited too instead of being
+    // forced to 255.
+    void SetPremultiplied(bool on) { m_premultiplied = on; }
+    bool Premultiplied() const { return m_premultiplied; }
+
     // Texture filtering. Bilinear (default) suits the preview tool, where
     // glyphs are rasterized at 1x and the frame is supersampled. Nearest is
     // crisper *and* ~2x faster when the atlas is rasterized at exactly the
@@ -78,6 +88,7 @@ private:
     const unsigned char* m_texels = nullptr;
     int m_texWidth = 0, m_texHeight = 0;
     Filter m_filter = FilterBilinear;
+    bool   m_premultiplied = false;
 };
 
 }  // namespace render

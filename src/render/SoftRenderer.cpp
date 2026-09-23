@@ -103,7 +103,9 @@ void SoftRenderer::BlendPixel(int x, int y, const Color4& src)
     dst.r = (unsigned char)Div255(src.r * a + dst.r * ia);
     dst.g = (unsigned char)Div255(src.g * a + dst.g * ia);
     dst.b = (unsigned char)Div255(src.b * a + dst.b * ia);
-    dst.a = 255;
+    dst.a = m_premultiplied
+                ? (unsigned char)(a + Div255(dst.a * ia))   // the destination keeps its own alpha
+                : 255;
 }
 
 Color4 SoftRenderer::SampleTexture(float u, float v, int texWidth, int texHeight) const
@@ -183,7 +185,9 @@ void SoftRenderer::RasterizeTriangle(const ImDrawVert& va, const ImDrawVert& vb,
                 dst.r = (unsigned char)Div255(src.r * a + dst.r * ia);
                 dst.g = (unsigned char)Div255(src.g * a + dst.g * ia);
                 dst.b = (unsigned char)Div255(src.b * a + dst.b * ia);
-                dst.a = 255;
+                dst.a = m_premultiplied
+                            ? (unsigned char)(a + Div255(dst.a * ia))
+                            : 255;
             }
         }
         return;

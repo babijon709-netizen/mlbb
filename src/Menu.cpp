@@ -895,9 +895,9 @@ float DrawDeviceSection(ImDrawList* dl, const Fonts& f, const Config& cfg, const
 {
     const float h = SectionHeight(4, metrics::kRowH);
     Section dev = BeginSection(dl, f, "DEVICE", pos, w, h);
-    InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "MODEL", "iPhone 15,2", -1.0f, nullptr);
-    InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "SYSTEM", "iOS 17.4 \xc2\xb7 rootless", -1.0f, nullptr);
-    InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "RENDER", "Metal \xc2\xb7 ImGui 1.83", -1.0f, nullptr);
+    InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "MODEL",  cfg.deviceModel ? cfg.deviceModel : "-", -1.0f, nullptr);
+    InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "SYSTEM", cfg.deviceSystem ? cfg.deviceSystem : "-", -1.0f, nullptr);
+    InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "RENDER", cfg.deviceRender ? cfg.deviceRender : "-", -1.0f, nullptr);
     InfoRow(dl, f, V(dev.inner.x, dev.Row(metrics::kRowH)), dev.innerW, metrics::kRowH, "BUILD", cfg.build ? cfg.build : "-", -1.0f, nullptr);
     return h;
 }

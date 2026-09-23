@@ -43,6 +43,14 @@ struct Config {
     // than it is wide; the content is then scrolled by dragging.
     bool  compact = false;
 
+    // --- device rows -----------------------------------------------------
+    // The DEVICE section is decoration: nothing is queried by the menu itself.
+    // The overlay build fills these with the real phone (ro.product.model and
+    // friends), the SDL build keeps the defaults.
+    const char* deviceModel  = "iPhone 15,2";
+    const char* deviceSystem = "iOS 17.4 \xc2\xb7 rootless";
+    const char* deviceRender = "Metal \xc2\xb7 ImGui 1.83";
+
     // --- texts ----------------------------------------------------------
     const char* brand    = "spectre";                 // shown next to the icon
     const char* greeting = "Hey,";

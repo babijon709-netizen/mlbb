@@ -3,11 +3,14 @@
 #  run.sh - собрать и запустить меню. Один вход для телефона и для десктопа.
 #
 #    ./run.sh                  собрать и открыть окно (на телефоне - на весь экран)
+#    ./run.sh --overlay        собрать и повесить меню ПОВЕРХ других приложений
+#                              (нужен root; X11 и SDL не нужны вообще)
 #    ./run.sh --shot menu.ppm  отрендерить один кадр в файл, окно не нужно
 #    ./run.sh --windowed 900x600
 #    ./run.sh --tab 2 --populate
 #
-#  Android: нужен Termux + Termux:X11 (см. подсказки ниже, скрипт сам их печатает).
+#  Android: нужен Termux; для --overlay ещё root (Magisk/SuperSU).
+#           для обычного окна - Termux:X11 (см. подсказки ниже).
 #  Linux/macOS: нужен SDL2 (libsdl2-dev / brew install sdl2).
 #
 #  Всё, что скрипт не понимает, он передаёт приложению - список флагов:
@@ -36,20 +39,26 @@ warn() { printf '%s%s%s\n' "$c_pink" "$*" "$c_reset"; }
 die()  { printf '%s%s%s\n' "$c_red" "$*" "$c_reset" >&2; exit 1; }
 
 usage() {
-    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
     say ""
     say "Флаги приложения (передаются как есть):"
-    "$BIN" --help 2>/dev/null || say "  (сначала соберите: ./run.sh --build)"
+    local bin="$BIN"
+    for a in "$@"; do
+        [ "$a" = "--overlay" ] && bin="$ROOT/build/spectre-overlay"
+    done
+    "$bin" --help 2>/dev/null || say "  (сначала соберите: ./run.sh --build)"
 }
 
 with_install=1
 SHOT=""
 BUILD_ONLY=0
+OVERLAY=0
 APP_ARGS=()
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --shot)       SHOT="${2:-menu.ppm}"; shift 2 ;;
+        --overlay)    OVERLAY=1; shift ;;
         --build)      BUILD_ONLY=1; shift ;;
         --no-install) with_install=0; shift ;;
         -h|--help)    usage; exit 0 ;;
@@ -62,8 +71,11 @@ if [ "$TERMUX" = "1" ]; then
     need_pkgs=""
     command -v clang++    >/dev/null 2>&1 || need_pkgs="$need_pkgs clang"
     command -v make       >/dev/null 2>&1 || need_pkgs="$need_pkgs make"
-    command -v pkg-config >/dev/null 2>&1 || need_pkgs="$need_pkgs pkg-config"
-    pkg-config --exists sdl2 2>/dev/null || need_pkgs="$need_pkgs sdl2"
+    if [ "$OVERLAY" = "0" ]; then
+        # Оверлею SDL не нужен: он рисует сам и говорит прямо с SurfaceFlinger.
+        command -v pkg-config >/dev/null 2>&1 || need_pkgs="$need_pkgs pkg-config"
+        pkg-config --exists sdl2 2>/dev/null || need_pkgs="$need_pkgs sdl2"
+    fi
 
     if [ -n "$need_pkgs" ]; then
         if [ "$with_install" = "1" ] && command -v pkg >/dev/null 2>&1; then
@@ -97,16 +109,29 @@ if [ ! -f "$ROOT/external/imgui/imgui.h" ] && command -v curl >/dev/null 2>&1; t
 fi
 [ -f "$ROOT/external/imgui/imgui.h" ] || die "Без ImGui собрать нельзя: git submodule update --init --recursive"
 
-say "${c_dim}Собираю...${c_reset}"
-make -C "$ROOT" app -j"$JOBS" || die "Сборка не прошла"
+if [ "$OVERLAY" = "1" ]; then
+    say "${c_dim}Собираю оверлей (без SDL, без NDK - только clang)...${c_reset}"
+    make -C "$ROOT" overlay -j"$JOBS" || die "Сборка не прошла"
+    BIN="$ROOT/build/spectre-overlay"
+else
+    say "${c_dim}Собираю...${c_reset}"
+    make -C "$ROOT" app -j"$JOBS" || die "Сборка не прошла"
+fi
 ok "Готово: $BIN"
 [ "$BUILD_ONLY" = "1" ] && exit 0
 
-FONT_ARGS=(--font "$ROOT/assets/fonts/DejaVuSansMono.ttf" --bold "$ROOT/assets/fonts/DejaVuSansMono-Bold.ttf")
+FONT_ARGS=()
+if [ "$OVERLAY" = "0" ]; then
+    FONT_ARGS=(--font "$ROOT/assets/fonts/DejaVuSansMono.ttf" --bold "$ROOT/assets/fonts/DejaVuSansMono-Bold.ttf")
+fi
 
 # ----------------------------------------------------------- рендер в картинку -
 if [ -n "$SHOT" ]; then
-    SDL_VIDEODRIVER=dummy "$BIN" "${FONT_ARGS[@]}" --frames 3 --out "$SHOT" "$@"
+    if [ "$OVERLAY" = "1" ]; then
+        SDL_VIDEODRIVER=dummy "$BIN" --shot "$SHOT" "${APP_ARGS[@]+"${APP_ARGS[@]}"}"
+    else
+        SDL_VIDEODRIVER=dummy "$BIN" "${FONT_ARGS[@]}" --frames 3 --out "$SHOT" "${APP_ARGS[@]+"${APP_ARGS[@]}"}"
+    fi
     status=$?
     if [ $status -eq 0 ] && command -v convert >/dev/null 2>&1; then
         case "$SHOT" in
@@ -114,6 +139,38 @@ if [ -n "$SHOT" ]; then
         esac
     fi
     exit $status
+fi
+
+# ------------------------------------------------------------------ оверлей ---
+if [ "$OVERLAY" = "1" ]; then
+    if [ "$TERMUX" != "1" ]; then
+        warn "Оверлей живёт на Android (SurfaceFlinger) - на этой машине он умеет только --shot."
+        "$BIN" "${APP_ARGS[@]+"${APP_ARGS[@]}"}"
+        exit $?
+    fi
+
+    command -v su >/dev/null 2>&1 || die "su не найден: для оверлея нужен root (Magisk/SuperSU)"
+    say "Проверяю root - на телефоне разрешите запрос суперпользователя..."
+    su -c id >/dev/null 2>&1 || die "root недоступен (su -c id не сработал)"
+
+    staged=/data/local/tmp/spectre-overlay
+    prefix="${PREFIX:-/data/data/com.termux/files/usr}"
+    libcxx="$(find "$prefix/lib" -maxdepth 1 -name 'libc++_shared.so' 2>/dev/null | head -1)"
+
+    say "Кладу бинарь и шрифты в $staged (оттуда root его запустит)..."
+    su -c "mkdir -p $staged && cp '$BIN' $staged/spectre-overlay && chmod 755 $staged/spectre-overlay \
+           && cp '$ROOT'/assets/fonts/*.ttf $staged/ 2>/dev/null; ${libcxx:+cp '$libcxx' $staged/ 2>/dev/null; true}" \
+        || die "не получилось скопировать в $staged"
+
+    quoted="$(printf '%q ' "${APP_ARGS[@]+"${APP_ARGS[@]}"}")"
+    say ""
+    ok "Оверлей поверх всего. Выход: крестик в меню или Громкость+ и Громкость- вместе."
+    say "${c_dim}Если касания попадают не туда: ./run.sh --overlay --debug-touch,"
+    say "затем подгоните --touch-swap / --touch-mirror-x|y / --touch-rot.${c_reset}"
+    say ""
+
+    su -c "cd $staged && LD_LIBRARY_PATH=$staged:$prefix/lib ./spectre-overlay $quoted"
+    exit $?
 fi
 
 # ------------------------------------------------------------------ X11/дисплей

@@ -4,9 +4,14 @@
 fastfetch: полупрозрачное окно, розовый блочный баннер `SPECTRE`, секции с
 заголовком на рамке, строки `ЛЕЙБЛ | значение` с барами, лог-консоль.
 
-Запускается и как **отдельное приложение** (`src/app`, SDL2 + софтверный
-рендер, никакого GPU) — так его можно покликать на телефоне через Termux, и как
-**модуль внутри чужого ImGui-бэкенда** (в твике это `ImGuiDrawView.mm` + Metal).
+Запускается тремя способами:
+
+* **окном на десктопе** — `make app` (SDL2 + софтверный рендер, никакого GPU);
+* **окном на телефоне** — `./run.sh` (Termux + Termux:X11), тап = клик, свайп = прокрутка;
+* **оверлеем поверх других приложений** — `./run.sh --overlay` (Android + root,
+  без SDL, X11 и NDK: своя SurfaceFlinger-поверхность и чтение тача из `/dev/input`).
+
+Плюс как **модуль внутри чужого ImGui-бэкенда** (в твике это `ImGuiDrawView.mm` + Metal).
 
 > **Внутри нет никакого функционала.** Ни одного адреса, хука или обращения к
 > игре — только UI. Все тумблеры/слайдеры/комбо хранят собственное состояние в
@@ -49,6 +54,71 @@ Termux:X11 и запустит меню на весь экран. Тап — к�
 ./run.sh --shot menu.ppm && convert menu.ppm menu.png
 ```
 
+## Оверлей поверх других приложений (root)
+
+То же меню, но не окном, а **слоем поверх всего**: его можно включить прямо
+поверх игры и кликать по нему.
+
+```bash
+./run.sh --overlay                     # собрать и повесить поверх всего
+./run.sh --overlay --populate --tab 2  # сразу с включёнными тумблерами
+```
+
+Никакого APK, JNI и Android Studio — это один ELF:
+
+1. `src/overlay/ANativeWindowCreator.h` создаёт слой прямо в SurfaceFlinger,
+   вручную разбирая символы `libgui.so` / `libutils.so` (системный вызов, поэтому
+   нужен root);
+2. слой помечен `SetTrustedOverlay(true)` + `SetLayer(INT_MAX)` — он самый верхний
+   и **не входит в дерево обработки ввода**: касания продолжают доходить до игры,
+   а меню читает их само из `/dev/input` (`src/overlay/TouchReader.*`);
+3. кадр рисует тот же софтверный растеризатор, а отдаётся он через
+   `ANativeWindow_lock()` / `unlockAndPost()` — обычный CPU-производитель
+   BufferQueue, как `lockCanvas()` у `SurfaceView`. Ни EGL, ни GLES, ни SDL здесь
+   нет вообще;
+4. буфер — premultiplied RGBA8888, поэтому прозрачные места меню действительно
+   прозрачные: сквозь них видно игру.
+
+Сборке нужны только `clang` и `make` — всё есть в Termux:
+
+```bash
+pkg install clang make
+git clone https://github.com/babijon709-netizen/mlbb && cd mlbb
+./run.sh --overlay
+```
+
+![overlay](docs/preview/overlay.png)
+
+Управление: тап — клик, свайп — прокрутка (в компактной вёрстке) или перетаскивание
+окна, `✕` в заголовке — выход, **Громкость+ и Громкость− вместе** — аварийный выход.
+
+Если тап попадает не туда (панель бывает повёрнута относительно экрана — тогда
+меню реагирует «по диагонали»):
+
+```bash
+./run.sh --overlay --debug-touch                 # крестик и координаты на экране
+./run.sh --overlay --touch-swap --touch-mirror-x # или --touch-mirror-y / --touch-rot 90
+```
+
+Диагностика печатается в stdout и в logcat (тег `spectre`): uid, режим дисплея,
+размер и формат поверхности, все найденные `/dev/input/event*` с диапазонами осей
+и выбранное преобразование.
+
+Полезные флаги:
+
+| флаг | смысл |
+| --- | --- |
+| `--size WxH` | размер поверхности (по умолчанию весь экран) |
+| `--grab` | забрать тач у игры, пока работает меню (по умолчанию касания идут и в игру) |
+| `--no-exit-chord` | выключить выход по «громкость+ / громкость−» |
+| `--shot FILE --shot-bg RRGGBB` | отрендерить один кадр в PPM прямо на телефоне или на ПК |
+
+Чего ждать не стоит: слой помечен как trusted overlay, поэтому в **запись экрана и
+скриншоты (MediaProjection) он не попадёт**, и в «недавних» его нет — система не
+знает, что что-то запущено, выходить нужно крестиком или по громкости. Кнопок
+`—` и `□` в заголовке это тоже касается: свернуть оверлей некуда, поэтому они
+просто переключают состояние.
+
 ## Десктоп
 
 ```bash
@@ -65,12 +135,15 @@ include/mlbb_gui/Menu.h      публичный API: Config, Fonts, Features, Dr
 include/mlbb_gui/Theme.h     палитра, метрики, ASCII-арт, ApplyTheme()
 src/Menu.cpp                 вся отрисовка меню (ImDrawList, без стоковых виджетов)
 src/Theme.cpp                стиль ImGui + баннер и эмблема
-src/app/main_sdl.cpp         приложение: окно SDL2, ввод (мышь/тач/клавиатура), бэкдроп
+src/app/main_sdl.cpp         приложение-окно: SDL2, ввод (мышь/тач/клавиатура), бэкдроп
+src/app/main_overlay.cpp     оверлей: своя SurfaceFlinger-поверхность, /dev/input, кадры через ANativeWindow_lock
+src/overlay/                 слой Android: создание поверхности + чтение тача + вывод кадров
+src/overlay/ANativeWindowCreator.h  создание слоя в SurfaceFlinger (MIT, AFan4724/Qimgui, см. шапку файла)
 src/render/SoftRenderer.*    софтверный растеризатор ImDrawData -> RGBA (общий для app и preview)
 tools/preview/               отладочный рендерер меню в картинку (без окна и GPU)
 assets/fonts/                DejaVu Sans Mono (+ Bold) — шрифт по умолчанию
 run.sh                       сборка и запуск одной командой (телефон и десктоп)
-Makefile                     make app / run / shot / clean
+Makefile                     make app / overlay / shot / run / clean
 external/imgui               сабмодуль ocornut/imgui, пришпилен на тег v1.83
 docs/preview/                скриншоты
 ```
@@ -86,6 +159,11 @@ docs/preview/                скриншоты
   логических единицах, поэтому на телефоне текст крупный **и** резкий, а не
   растянутый. `src/app` подбирает плотность сам так, чтобы меню почти
   заполняло экран.
+* **Оверлей без APK.** На Android слой создаётся вызовом SurfaceFlinger, кадры
+  уходят в него через `ANativeWindow_lock()`, а ввод читается из `/dev/input`:
+  поэтому `src/overlay/*` не тянет ни NDK, ни EGL — файлы `ANativeWindowCreator.h`
+  и `ndk_compat.h` заменяют собой заголовки NDK, а `libgui.so` / `libutils.so` /
+  `libandroid.so` ищутся символами уже на устройстве.
 * **Компактная вёрстка.** Если экран выше, чем шире, `src/app` включает
   `Config::compact`: окно занимает весь экран, а секции идут одной колонкой и
   прокручиваются свайпом (тонкий ползунок справа). Ландшафт и десктоп остаются
@@ -160,7 +238,13 @@ convert menu.ppm menu.png     # PPM -> PNG (ImageMagick)
 | `--fps N` | ограничение частоты кадров (0 — без ограничения, по умолчанию 60) |
 | `--filter bilinear\|nearest` | фильтрация текстуры шрифта |
 
-Клавиши: `F1..F5` — вкладки, `F11` — полный экран, `F12` — скриншот
+У оверлея свой набор (тач, размеры поверхности, отладочная калибровка):
+
+```bash
+./run.sh --overlay --help
+```
+
+Клавиши окна: `F1..F5` — вкладки, `F11` — полный экран, `F12` — скриншот
 (`spectre-N.ppm`), `Esc` — выход.
 
 ## Производительность
@@ -227,5 +311,8 @@ g++ -std=c++17 -fsyntax-only -Iinclude -Iexternal/imgui src/Menu.cpp
 ## Лицензия
 
 См. `LICENSE` (репозиторий использовал MIT). ImGui распространяется по своей
-лицензии (MIT) — `external/imgui/LICENSE.txt`. Шрифт DejaVu — свободная
+лицензии (MIT) — `external/imgui/LICENSE.txt`. `src/overlay/ANativeWindowCreator.h`
+взят из [Qimgui](https://github.com/nmldy/Qimgui) /
+[AndroidSurfaceImgui-Enhanced](https://github.com/AFan4724/AndroidSurfaceImgui-Enhanced)
+(MIT, © AFan4724) — список правок в шапке файла. Шрифт DejaVu — свободная
 лицензия Bitstream Vera/DejaVu, текст в `assets/fonts/LICENSE-DejaVu.txt`.

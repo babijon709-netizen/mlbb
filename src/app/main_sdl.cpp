@@ -112,26 +112,22 @@ bool FileExists(const char* path)
 }
 
 // Looks for a font: the command line, then the repository, then the system.
-const char* PickFont(const char* fromCli, const std::string& exeDir, const char* const* candidates, int count)
+// `slot` owns the path (one buffer per font - a shared one would be overwritten
+// by the second call and leave the first pointer dangling).
+const char* PickFont(std::string& slot, const std::string& exeDir, const char* const* candidates, int count)
 {
-    if (fromCli) return fromCli;
+    const std::string dirs[] = {
+        exeDir + "/assets/fonts/", exeDir + "/../assets/fonts/", exeDir + "/../../assets/fonts/",
+        "assets/fonts/", "../assets/fonts/", ""
+    };
 
-    std::vector<std::string> paths;
-    paths.push_back(exeDir + "/assets/fonts/");        // build/../.. handled below
-    paths.push_back(exeDir + "/../assets/fonts/");
-    paths.push_back(exeDir + "/../../assets/fonts/");
-    paths.push_back("assets/fonts/");
-    paths.push_back("../assets/fonts/");
-    paths.push_back("");
-
-    static std::vector<std::string> storage;   // keep the strings alive
-    for (const std::string& dir : paths) {
+    for (const std::string& dir : dirs) {
         for (int i = 0; i < count; ++i) {
-            storage.push_back(dir + candidates[i]);
-            if (FileExists(storage.back().c_str())) return storage.back().c_str();
-            storage.pop_back();
+            slot = dir + candidates[i];
+            if (FileExists(slot.c_str())) return slot.c_str();
         }
     }
+    slot.clear();
     return nullptr;
 }
 
@@ -341,8 +337,9 @@ int main(int argc, char** argv)
     cfg.pixelDensity = density;
     cfg.compact = compact;
     cfg.hint = compact ? "tap to toggle \xc2\xb7 drag to scroll" : "drag the strip to move the window";
-    cfg.fontRegular = PickFont(opt.font, exeDir, kRegular, (int)(sizeof(kRegular) / sizeof(kRegular[0])));
-    cfg.fontBold    = PickFont(opt.bold, exeDir, kBoldList, (int)(sizeof(kBoldList) / sizeof(kBoldList[0])));
+    static std::string fontRegularPath, fontBoldPath;
+    cfg.fontRegular = opt.font ? opt.font : PickFont(fontRegularPath, exeDir, kRegular, (int)(sizeof(kRegular) / sizeof(kRegular[0])));
+    cfg.fontBold    = opt.bold ? opt.bold : PickFont(fontBoldPath, exeDir, kBoldList, (int)(sizeof(kBoldList) / sizeof(kBoldList[0])));
 
     mlbb::Features st;
     st.folded = opt.folded;
