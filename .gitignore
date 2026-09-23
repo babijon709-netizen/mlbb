@@ -1,0 +1,17 @@
+# --- preview tool artefacts ---------------------------------------------------
+tools/preview/build/
+tools/preview/*.ppm
+tools/preview/*.png
+
+# --- Theos / tweak build artefacts -------------------------------------------
+.theos/
+*.deb
+*.dylib
+*.o
+*.a
+
+# --- misc --------------------------------------------------------------------
+.DS_Store
+*.swp
+compile_commands.json
+.cache/
